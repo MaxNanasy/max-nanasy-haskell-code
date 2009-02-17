@@ -6,13 +6,28 @@ import Control.Monad.Writer.Lazy
 
 import Data.Maybe
 
-newtype Behavior msg = Behavior (msg -> Result msg)
+type Behavior msg = msg -> Acting msg ()
+
 data Result msg = Result [Communication] (Behavior msg)
                 | New (Behavior msg) (Actor msg -> Result msg)
 data Communication = forall msg. Communication (Actor msg) msg
-newtype Actor msg = Actor (msg -> IO ())
 
-newtype Acting msg a = Acting (Writer ([Communication], Last (Behavior msg)) a) deriving (Monad)
+newtype Acting msg a = Acting (Writer ([Communication], Last (Behavior msg)) a) -- deriving (Monad)
 
-actingToResult :: Acting msg () -> Behavior msg -> Result msg
-actingToResult (Acting w) oldBehavior = case execWriter w of (communications, newBehavior) -> Result communications (fromMaybe oldBehavior (getLast newBehavior))
+instance Monad (Acting msg) where
+    Acting x >>= f = Acting $ x >>= (\ y -> case f y of Acting w -> w)
+    return = Acting . return
+
+newtype Actor msg = Actor { sendIO :: msg -> IO () }
+
+actor = Actor
+
+actionToResult :: Acting msg () -> Behavior msg -> Result msg
+actionToResult (Acting (Writer (_, (communications, Last maybeNewBehavior)))) oldBehavior = Result communications (fromMaybe oldBehavior maybeNewBehavior)
+
+become :: Behavior msg -> Acting msg ()
+become = Acting . tell . curry id [] . Last . Just
+
+send :: Actor msg' -> msg' -> Acting msg ()
+send = ((Acting . tell . flip (curry id) (Last Nothing) . (:[])) .) . Communication
+
