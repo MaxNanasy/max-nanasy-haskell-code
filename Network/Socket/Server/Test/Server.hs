@@ -12,7 +12,7 @@ import IO
 import Control.Monad
 import Control.Monad.Fix
 import Directory
-import Data.Function
+--import Data.Function
 
 main :: IO ()
 main = do
@@ -30,7 +30,7 @@ channelToFiniteList channel = unfoldM (atomically $ isEmptyTChan channel) (atomi
 channelToInfiniteList channel = fix $ liftM2 (:) (putStrLn "Reading..." >> (atomically $ readTChan channel))
 
 mapChannel_ :: (a -> IO b) -> TChan a -> IO c
-mapChannel_ f channel = fix ((atomically $ readTChan channel) >>= f >>)
+mapChannel_ f channel = fix ((atomically $ readTChan channel) >>= f >>) where fix f = f $ fix f
 
 f ""       = Nothing
 f (c : cs) = Just (c, cs)
