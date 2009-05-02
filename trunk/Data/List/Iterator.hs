@@ -2,31 +2,33 @@
 
 module Data.List.Iterator where
 
-newtype ListIterator a = LI ([a],[a]) deriving(Show)
+data ListIterator a = LI [a] [a] deriving(Show)
 
 iterator :: [a] -> ListIterator a
-iterator   x          = LI ([],x)
+iterator   xs       = LI [] xs
 deiterator :: ListIterator a -> [a]
-deiterator (LI (p,n)) = reverse p ++ n
+deiterator (LI p n) = reverse p ++ n
 
-now :: ListIterator a -> a
-now        (LI (_  , x:_))               = x
-now        (LI (_  , [] ))               = error "Brainfuck.now: now    of empty LI"
+current :: ListIterator a -> Maybe a
+current (LI      _  (x : _ )) = Just x
+current (LI      _       [] ) = Nothing
 
-next :: ListIterator a -> ListIterator a
-next       (LI (p  , x:n))               = LI (x:p,n)
-next       (LI (_  , [] ))               = error "Brainfuck.next: next   of empty LI"
+next :: ListIterator a -> Maybe (ListIterator a)
+next    (LI      p  (x : n )) = Just $ LI (x : p)     n
+next    (LI      _       [] ) = Nothing
 
-prev :: ListIterator a -> ListIterator a
-prev       (LI (x:p, n  ))               = LI (p,x:n)
-prev       (LI ([] , _  ))               = error "Brainfuck.prev: prev   of empty LI"
+prev :: ListIterator a -> Maybe (ListIterator a)
+prev    (LI (x : p ) n  )     = Just $ LI      p (x : n)
+prev    (LI      []  _  )     = Nothing
 
-setNow :: a -> ListIterator a -> ListIterator a
-setNow     x               (LI (p, _:n)) = LI (p,x:n)
-setNow     _               (LI (_, [] )) = error "Brainfuck.setNow: setNow of empty LI"
+setCurrent :: a -> ListIterator a -> Maybe (ListIterator a)
+setCurrent x (LI p (_ : n )) = Just $ LI p (x : n)
+setCurrent _ (LI _      [] ) = Nothing
 
-applyToNow :: (a -> a) -> ListIterator a -> ListIterator a
-applyToNow f               l             = setNow (f $ now l) l
+applyToCurrent :: (a -> a) -> ListIterator a -> Maybe (ListIterator a)
+applyToCurrent f li = do
+  x <- current li
+  setCurrent (f x) li
 
 circularListIterator :: [a] -> ListIterator a
-circularListIterator l = LI $ (cycle $ reverse l, cycle l)
+circularListIterator l = LI (cycle $ reverse l) (cycle l)

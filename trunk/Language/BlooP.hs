@@ -2,12 +2,12 @@
 
 module Language.BlooP(fromInteger, cell, (<--), (>>), Function) where
 
-import Number.Peano
+import qualified Number.Peano as Peano
 
 import           Prelude hiding(fromInteger)
 import qualified Prelude
 
-type Function = T -> BlooP
+type Function = Peano.T -> BlooP
 
 data BlooP = Block [BlooP]
            | Expression := Expression
@@ -18,14 +18,14 @@ data Expression = Yes
                 | No
                 | Expression :+: Expression
                 | Expression :*: Expression
-                | Cell   T
+                | Cell   Peano.T
                 | Output
                   deriving(Show)
 
 (<--) :: Expression -> Expression -> BlooP
 (<--) = Assignment
 
-cell :: T -> Expression
+cell :: Peano.T -> Expression
 cell = Cell
 
 class FromInteger a where
@@ -34,5 +34,5 @@ class FromInteger a where
 instance FromInteger Expression where
     fromInteger = Nat . fromInteger
 
-instance FromInteger T where
+instance FromInteger Peano.T where
     fromInteger = Prelude.fromInteger

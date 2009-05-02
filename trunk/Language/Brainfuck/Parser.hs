@@ -11,9 +11,9 @@ import Text.ParserCombinators.Parsec
 
 import Language.Brainfuck.Class
 
-type AssocList k v = [(k, v)]
+type AList k v = [(k, v)]
 
-instructionAL ::MonoidBF m => AssocList Char m
+instructionAL ::MonoidBF m => AList Char m
 instructionAL = [('+', incCell    ),
                  ('-', decCell    ),
                  ('>', incPointer ),
