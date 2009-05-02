@@ -8,16 +8,30 @@ import Data.Stream
 import Data.Char
 
 import System.IO
-import System.Environment
+import System.Console.ParseArgs
 
 import Control.Monad
 
 main :: IO ()
 main = do
-  [file] <- getArgs
-  code <- readFile file
-  hSetBuffering stdout NoBuffering
-  interact $ runBrainfuckCode code 
+  args <- parseArgsIO ArgsComplete possibleArgs
+  if gotArg args Help
+    then putStrLn $ argsUsage args ++ description
+    else do
+      let file = getRequiredArg args CodeFile
+      code <- readFile file
+      zipWithM_ hSetBuffering [stdin, stdout] [LineBuffering, LineBuffering]
+      interact $ runBrainfuckCode $ if gotArg args Script then dropWhile (/= '\n') code else code
+
+data Option = Help | Script | CodeFile deriving (Eq, Ord, Show)
+
+possibleArgs :: [Arg Option]
+possibleArgs = [ Arg { argIndex = Help  , argName = Just "help"  , argAbbr = Just 'h', argData = Nothing, argDesc = "usage information" }
+               , Arg { argIndex = Script, argName = Just "script", argAbbr = Just 's', argData = Nothing, argDesc = "treat code file as an interpreted script if '#!' line is present" }
+               , Arg { argIndex = CodeFile  , argName = Nothing      , argAbbr = Nothing , argData = argDataRequired "code file" ArgtypeString, argDesc = "file with Brainfuck code" }
+               ]
+
+description = "BRAINFUCK"
 
 class EOF a where
     eof :: a
@@ -29,4 +43,4 @@ makeListWithEOF :: EOF a => [a] -> [a]
 makeListWithEOF = (++ repeat eof)
 
 runBrainfuckCode :: String -> String -> String
-runBrainfuckCode source = map (chr . (max 0) . fromInteger) . runBrainfuck (parseSource source) . listToStream . makeListWithEOF . map (toInteger . ord)
+runBrainfuckCode source = map (chr . max minBound . fromInteger) . runBrainfuck (parseSource source) . listToStream . makeListWithEOF . map (toInteger . min maxBound . ord)
