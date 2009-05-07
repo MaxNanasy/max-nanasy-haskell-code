@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE FunctionalDependencies     #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE UndecidableInstances       #-}
@@ -10,6 +11,7 @@ import Prelude hiding (until)
 
 import Control.Monad.State
 import Control.Monad.Consumer
+import Control.Monad.Producer
 import Control.Monad.Writer
 
 import Control.Applicative
@@ -20,25 +22,25 @@ import Data.Stream.Iterator
 
 type Array = StreamIterator
 
-class    (Eq e, Enum e, MonadState (Array e) m, MonadConsumer e m, MonadWriter (f e) m, Applicative f) => BC e f m
-instance (Eq e, Enum e, MonadState (Array e) m, MonadConsumer e m, MonadWriter (f e) m, Applicative f) => BC e f m
+class    (Eq e, Enum e, MonadState (Array e) m, MonadConsumer e m, MonadProducer e m) => BC e m
+instance (Eq e, Enum e, MonadState (Array e) m, MonadConsumer e m, MonadProducer e m) => BC e m
 
 newtype Brainfuck m = BF (MonadAsMonoid (m ()))
     deriving(Monoid)
 
-modCell :: BC e f m => (e -> e) -> m ()
+modCell :: BC e m => (e -> e) -> m ()
 modCell = modify . applyToCurrent
 
-setCell :: BC e f m => e -> m ()
+setCell :: BC e m => e -> m ()
 setCell = modify . setCurrent
 
-getCell :: BC e f m => m e
+getCell :: BC e m => m e
 getCell = gets current
 
-getsCell :: BC e f m => (e -> a) -> m a
+getsCell :: BC e m => (e -> a) -> m a
 getsCell f = getCell >>= return . f
 
-cellIsZero :: BC e f m => m Bool
+cellIsZero :: BC e m => m Bool
 cellIsZero = getsCell (zero ==)
 
 while :: Monad m => m Bool -> m a -> m ()
@@ -54,14 +56,14 @@ until = while . liftM not
 zero :: Enum a => a
 zero = toEnum 0
 
-instance BC e f m => MonoidBF (Brainfuck m) where
+instance BC e m => MonoidBF (Brainfuck m) where
     incCell                       = BF $ MaM $ modCell succ
     decCell                       = BF $ MaM $ modCell pred
     incPointer                    = BF $ MaM $ modify  next
     decPointer                    = BF $ MaM $ modify  prev
     inputCell                     = BF $ MaM $ consume >>= setCell
-    outputCell                    = BF $ MaM $ getCell >>= tell . pure
+    outputCell                    = BF $ MaM $ getCell >>= produce
     loopUntilZero (BF (MaM body)) = BF $ MaM $ until cellIsZero body
 
-runBrainfuck :: (Enum e, Monoid (f e)) => Brainfuck (StateT (Array e) (WriterT (f e) (Consumer e))) -> Stream e -> f e
-runBrainfuck (BF (MaM program)) = evalConsumer . execWriterT . evalStateT program $ finiteListToStreamIterator [zero]
+runBrainfuck :: (Enum e, Monoid w) => Brainfuck (StateT (Array e) (PureProducerT w (Consumer e))) -> Stream e -> w
+runBrainfuck (BF (MaM program)) = evalConsumer . execPureProducerT . evalStateT program $ finiteListToStreamIterator [zero]

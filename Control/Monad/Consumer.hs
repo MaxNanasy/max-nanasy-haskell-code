@@ -1,17 +1,16 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, MultiParamTypeClasses, FlexibleInstances, FlexibleContexts, FunctionalDependencies, UndecidableInstances #-}
 
-module Control.Monad.Consumer (consume, Consumer, MonadConsumer, evalConsumer, execConsumer) where
+module Control.Monad.Consumer (consume, Consumer, MonadConsumer, evalConsumer) where
 
 import Data.Stream
 
 import Control.Monad.State.Lazy
 
-newtype Consumer e a = Consumer (State (Stream e) a) deriving (Monad)
+newtype Consumer e a = Consumer (State (Stream e) a) deriving Monad
 
 evalConsumer (Consumer s) = evalState s
-execConsumer (Consumer s) = execState s
 
-class Monad m => MonadConsumer e m where
+class Monad m => MonadConsumer e m | m -> e where
     consume :: m e
 
 instance MonadConsumer e (Consumer e) where
