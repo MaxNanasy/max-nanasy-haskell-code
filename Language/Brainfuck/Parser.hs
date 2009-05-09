@@ -32,8 +32,8 @@ instance MonoidBF ProgramSource where
 
 type ProgramSource = String
 
-type ProgramParser     m = GenParser Char () [m]
-type InstructionParser m = GenParser Char () m
+type ProgramParser     m = Parser [m]
+type InstructionParser m = Parser m
 
 parseSource :: MonoidBF m => ProgramSource -> m
 parseSource = either
