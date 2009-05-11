@@ -10,9 +10,7 @@ import Data.Maybe
 
 type Behavior msg = msg -> Acting msg ()
 
-data Communication = forall msg. Communication (Actor msg) msg
-
-newtype Acting  msg a = Acting  (WriterT ([Communication], Last (Behavior  msg)) IO a)
+newtype Acting  msg a = Acting  (WriterT (Last (Behavior  msg)) IO a)
 
 instance Monad (Acting msg) where
     Acting x >>= f = Acting $ x >>= (\ y -> case f y of Acting w -> w)
@@ -24,8 +22,8 @@ class MonadActing actor m | m -> actor where
     spawn  :: (msg' -> m msg' ())         -> m msg (actor msg')
 
 instance MonadActing Actor Acting where
-    become = Acting . tell . curry id [] . Last . Just
-    send = ((Acting . tell . flip (curry id) (Last Nothing) . (: [])) .) . Communication
+    become = Acting . tell . Last . Just
+    send = ((Acting . liftIO) .) . sendIO
     spawn = Acting . liftIO . spawnIO
 
 newtype Actor msg = Actor { sendIO :: msg -> IO () }
@@ -35,8 +33,7 @@ spawnIO originalBehavior = do
   mailbox <- newChan
   forkIO $ let loop behavior = do
                               action <- liftM behavior $ readChan mailbox
-                              (communications, newBehavior) <- execAction action behavior
-                              mapM_ (\ (Communication actor message) -> sendIO actor message) communications
+                              newBehavior <- execAction action behavior
                               loop newBehavior
            in loop originalBehavior
   return . Actor $ writeChan mailbox
@@ -47,10 +44,10 @@ spawnIOActorIO a = do
   forkIO . forever $ a =<< readChan mailbox
   return . Actor $ writeChan mailbox
 
-execAction :: Acting msg () -> Behavior msg -> IO ([Communication], Behavior msg)
+execAction :: Acting msg () -> Behavior msg -> IO (Behavior msg)
 execAction (Acting action) oldBehavior = do
-  (_, (communications, Last maybeNewBehavior)) <- runWriterT action
-  return (communications, fromMaybe oldBehavior maybeNewBehavior)
+  (_, Last maybeNewBehavior) <- runWriterT action
+  return $ fromMaybe oldBehavior maybeNewBehavior
 
 test :: IO (Actor ())
 test = do
