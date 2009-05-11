@@ -1,112 +1,66 @@
 module Data.NeuralNetwork where
 
 import Control.Concurrent.Actor
+import qualified Data.Map as M
 
-data SynapseM a = SM (Neuron a) a
+{-                                                       
+                                                         
+                                                         
+              O                                          
+               \                                         
+                \                                        
+                 \                                       
+                  \
+                   \                                     
+                    V
+                    
+              O --> O --> O
+              
+              
+              
+              
+              
+              
+              
+ -}
 
-type Neuron a = Actor (SynapseM a)
+data Synapse a = Synapse a a (Actor a)
+data ConnectM a = Connect a (Actor a) (Actor (Actor a))
+neuronB :: Num a => Actor a -> ([(a, a)] -> a) -> a -> M.Map Integer (Synapse a) -> Integer -> Behavior (ConnectM a)
+neuronB output calculation defaultWeight feedbacks n (Connect initialValue feedback connectionR) = do
+  let -- updateFeedbacks update :: (M.Map Integer (Synapse a) -> M.Map Integer (Synapse a)) -> Acting msg 
+      updateFeedbacks update = do
+        let newFeedbacks = update feedbacks
+        send output $ calculation $ map (\ (Synapse x y _) -> (x, y)) $ M.elems newFeedbacks
+        become $ \ (Connect initialValue feedback connectionR) -> neuronB output calculation defaultWeight newFeedbacks (n + 1) (Connect initialValue feedback connectionR)
+      stimulateB newValue = updateFeedbacks $ M.adjust (\ (Synapse _ weight feedback) -> Synapse newValue weight feedback) n
+--  spawn stimulateB >>= send connectionR
+  updateFeedbacks $ M.insert n (Synapse initialValue defaultWeight feedback)
 
-test :: IO ()
-test = spawnIOActorIO print >>= spawnIO . flip testB 7 >>= flip sendIO () >> let loop = loop in loop
+defaultDefaultWeight :: Num a => a
+defaultDefaultWeight = 1
 
-testB :: Actor Integer -> Integer -> Behavior ()
-testB printer n () = send printer 42 >> testB printer n ()
-testB printer 0 () = become $ const $ return ()
---  spawn testB >>= flip send ()
---  testB ()
+neuron :: Num a => Actor a -> ([(a, a)] -> a) -> Acting msg (Actor (ConnectM a))
+neuron output calculation = do
+  spawn $ neuronB output calculation defaultDefaultWeight M.empty 0
 
-{-import Data.List
-import Data.Monoid
-
-mapFst :: (a -> c) -> (a, b) -> (c, b)
-mapFst f (x, y) = (f x,   y)
-mapSnd :: (b -> c) -> (a, b) -> (a, c)
-mapSnd g (x, y) = (  x, g y)
-
-newtype Neuron a = Neuron { run :: [a] -> (a, Neuron a) }
-newtype Network a = Network [[Neuron a]]
-
-makeNeuron :: ([a] -> (a, Neuron a)) -> Neuron a
-makeNeuron = Neuron
-
-runNeuron :: Neuron a -> [a] -> (a, Neuron a)
-runNeuron = run
-
-weighted :: Num a => [a] -> Neuron a -> Neuron a
-weighted weights neuron = makeNeuron $ runNeuron neuron . zipWith (*) weights
-
-thresholded :: Ord a => (a, a) -> a -> Neuron a -> Neuron a
-thresholded (low, high) threshold neuron = makeNeuron $ \ inputs -> case runNeuron neuron inputs of (output, newNeuron) -> (if output < threshold then low else high, newNeuron)
-
-runNetwork :: Network a -> [a] -> ([a], Network a)
-runNetwork (Network layers) = mapSnd Network . runNetwork' layers where
-    runNetwork' :: [[Neuron a]] -> [a] -> ([a], [[Neuron a]])
-    runNetwork' []               inputs = (inputs, [])
-    runNetwork' (layer : layers) inputs = (outputs, newNeurons : laterNeurons) where
-                                                                  (newInputs, newNeurons) = unzip $ map (flip runNeuron inputs) layer
-                                                                  (outputs, laterNeurons) = runNetwork' layers outputs
-
-makeTestNeuron :: Num a => a -> Neuron a
-makeTestNeuron initialValue = makeNeuron $ \ inputs -> let newValue = initialValue + sum inputs in (newValue, makeTestNeuron newValue)
-
-test :: IO ()
-test = do
-  let testNeuron              = makeTestNeuron 0
-      (output0, testNeuron' ) = runNeuron testNeuron  [8, -3, 2]
-      (output1, testNeuron'') = runNeuron testNeuron' [8, -3, 2]
-  print $ output0
-  print $ output1-}
-
-{-
-type Weight = Float
-data Neuron  = Neuron  { inputWeights :: [Weight]
-                       , threshold    :: Weight
-                       } deriving Show
-data Network = Network { hiddenLayer  :: [Neuron]
-                       , outputLayer  :: [Neuron]
-                       } deriving Show
-type TestCase = ([Weight], [Weight])
-
-neuronOutput :: [Weight] -> Neuron -> Weight
-neuronOutput inputs (Neuron weights threshold) = 1 / (1 + exp (foldl (-) threshold $ zipWith (*) inputs weights))
-
-exec :: Network -> [Weight] -> ([Weight], [Weight])
-exec (Network hiddenLayer outputLayer) inputs = (hiddenOutputs, outputOutputs) where
-    hiddenOutputs = map (neuronOutput inputs       ) hiddenLayer
-    outputOutputs = map (neuronOutput hiddenOutputs) outputLayer
-
-defaultLearningRate :: Weight
-defaultLearningRate = 0.1
-
-step :: TestCase -> (Network, Weight) -> (Network, Weight)
-step (inputs, expected) (network @ (Network hiddenLayer outputLayer), error) = (Network newHiddenLayer newOutputLayer, newError) where
-    (hiddenOutputs, outputOutputs) = exec network inputs
-    errorOutputs = zipWith (-) expected outputOutputs
-    gradientOutputs = zipWith (\ o d -> o * (1 - o) * d) outputOutputs errorOutputs
-    newOutputLayer = zipWith (\ (Neuron ws t) g -> Neuron (zipWith (\ h w -> w + defaultLearningRate * h * g) hiddenOutputs ws) (t - defaultLearningRate * g)) outputLayer gradientOutputs
-    weightsByHidden = transpose $ map inputWeights outputLayer
-    gradientHidden  = zipWith (\ o ws -> o * (1 - o) * (sum $ zipWith (*) ws gradientOutputs)) hiddenOutputs weightsByHidden
-    newHiddenLayer = zipWith (\ (Neuron ws t) g -> Neuron (zipWith (\ h w -> w + defaultLearningRate * h * g) inputs        ws) (t - defaultLearningRate * g)) hiddenLayer gradientHidden
-    newError = error + sum (map (^ 2) errorOutputs)
-
-epoch :: Network -> [TestCase] -> (Network, Weight)
-epoch network = foldr step (network, 0)
-
-errorConvergence :: Weight
-errorConvergence = 0.001
-
-maxEpochNb :: Int
-maxEpochNb = 100000
-
-run :: Network -> [TestCase] -> Int -> (Network, Int, Weight)
-run network allInputs epochNb = let (newNetwork, delta) = epoch network allInputs
-                                in if delta <= errorConvergence || epochNb > maxEpochNb
-                                   then (newNetwork, epochNb, delta)
-                                   else run newNetwork allInputs (epochNb + 1)
+data StateM a = Get (Actor a)
+              | Set a
+stateB :: a -> Behavior (StateM a)
+stateB x (Get output) = send output x
+stateB _ (Set x     ) = become $ stateB x
 
 test :: IO ()
 test = do
-  let n = Network [Neuron [0.5, 0.4] 0.8, Neuron [0.9, 1.0] (-0.1)] [Neuron [-1.2, 1.1] 0.3]
-  let (n',e,err) = run n [([1,1],[0]),([0,1],[1]),([1,0],[1]),([0,0],[0])] 1
-  print (n',e,err)
--}
+  printer <- spawnIOActorIO putStrLn
+  spawnIO (testB printer) >>= flip sendIO ()
+
+testB :: Actor String -> Behavior ()
+testB output () = do
+  numberOutput <- spawn $ send output . show
+  neuron <- neuron numberOutput (\ xs -> if (sum $ map (uncurry (*)) xs) > 0 then 1 else 0)
+  let feedbackB x = send output $ "Neuron fed back error of " ++ show x
+      connectionB stimulate = send stimulate 42
+  feedback <- spawn feedbackB
+  connection <- spawn connectionB
+  send neuron (Connect 0 feedback connection)
