@@ -17,10 +17,7 @@ data Object s = SpecialOperator (SpecialOperator s)
               | Symbol String
               | Char Char
 
-newtype Lisp s a = Lisp { unLisp :: StateT Stream (WriterT Stream (ST s)) (ReaderT (Cell s) Identity a) }
-
-instance Monad (Lisp s) where
-    f 
+newtype Lisp s a = Lisp { unLisp :: StateT Stream (WriterT Stream (ReaderT (Cell s) (ST s))) a } deriving Monad
 
 type Stream = [Char]
 

@@ -12,6 +12,7 @@ import Data.Maybe
 
 import System.IO hiding (print)
 
+mapLlist :: Function s -> OneParam s
 mapLlist f (Cons aC dC) = do
   a <- f =<< readCell aC
   d <- mapLlist f =<< readCell dC
@@ -19,6 +20,7 @@ mapLlist f (Cons aC dC) = do
 mapLlist _ Nil = return Nil
 mapLlist _ _   = error "mapLlist: Not a list."
 
+eval :: Environment s -> OneParam s
 eval env (Symbol name )      = return . snd . fromMaybe (error $ name ++ " not found.") . find (\ ((Symbol name'), _) -> name == name') $ env
 eval env (Cons   funC argsC) = do
   fun <- eval env =<< readCell funC
@@ -30,9 +32,10 @@ eval env (Cons   funC argsC) = do
     _                        -> error "eval: Not a functional value."
 eval _   x                   = return x
 
+quote :: Environment s -> OneParam s
 quote _ form = return form
 
-lambda :: Environment s -> Object s -> Object s -> Lisp s (Object s)
+lambda :: Environment s -> TwoParam s
 lambda env params body = do 
   (params', rest) <- llistToList params
   let f args = do
@@ -42,19 +45,24 @@ lambda env params body = do
 
 --defineFunction symbol value = 
 
+car, cdr :: OneParam s
 car (Cons aC _ ) = readCell aC
 car _            = error "car: Not a cons."
 cdr (Cons _  dC) = readCell dC
 cdr _            = error "cdr: Not a cons."
 
+cons :: TwoParam s
 cons a d = liftM2 Cons (newCell a) (newCell d)
 
-macro (Function f) = return $ Macro f
-macro _            = error "macro: Not a function."
+macroFunction :: OneParam s
+macroFunction (Function f) = return $ Macro f
+macroFunction _            = error "macro: Not a function."
 
+apply :: TwoParam s
 apply (Function f) args = f args
 apply _            _    = error "apply: Not a function."
 
+macroexpand1 :: TwoParam s
 macroexpand1 (Macro macro) args = macro args
 macroexpand1 _             _    = error "macroexpand-1: Not a macro."
 
@@ -66,6 +74,7 @@ llistToList (Cons aC dC) = do
   return (a : xs, x)
 llistToList x            = return ([], x)
 
+typeOf :: OneParam s
 typeOf Function        {} = return $ Symbol "function"
 typeOf Cons            {} = return $ Symbol "cons"
 typeOf Nil                = return $ Symbol "nil"
@@ -74,6 +83,7 @@ typeOf Symbol          {} = return $ Symbol "symbol"
 typeOf Macro           {} = return $ Symbol "macro"
 typeOf Char            {} = return $ Symbol "char"
 
+ifFunction :: ThreeParam s
 ifFunction Nil (Function _) (Function e) = e Nil
 ifFunction _   (Function t) (Function _) = t Nil
 ifFunction _   _            _            = error "ifFunction: Not a function."
@@ -136,7 +146,7 @@ initialEnvironment :: Environment s
 initialEnvironment =
     [ (Symbol "quote"        , SpecialOperator $ \ env -> oneParam "quote"  (quote  env)      )
     , (Symbol "lambda"       , SpecialOperator $ \ env -> twoParam "lambda" (lambda env)      )
-    , (Symbol "macro"        , Function $ oneParam   "macro"         macro                    )
+    , (Symbol "macro"        , Function $ oneParam   "macro"         macroFunction            )
     , (Symbol "car"          , Function $ oneParam   "car"           car                      )
     , (Symbol "cdr"          , Function $ oneParam   "cdr"           cdr                      )
     , (Symbol "cons"         , Function $ twoParam   "cons"          cons                     )
