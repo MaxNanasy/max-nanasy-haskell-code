@@ -10,15 +10,15 @@ import Control.Monad.State
 import Control.Monad.ST
 import Data.STRef
 
-runLisp :: (forall s. (Lisp s a, Cell s)) -> Stream -> (a, Stream)
-runLisp ce s = runST (runWriterT (evalStateT (runReaderT (unLisp c) e) s)) where
-    c = fst ce
-    e = snd ce
+runLisp :: (forall s. Lisp s a) -> Stream -> (a, Stream)
+runLisp c s = runST (do
+                      envC <- liftM Cell $ newSTRef Nil
+                      runReaderT (runWriterT (evalStateT (unLisp c) s)) envC)
 
 liftST        x = Lisp (lift (lift (lift x)))
-liftStdout    x = Lisp       (lift (lift x))
-liftStdin     x = Lisp             (lift x)
-liftGlobalEnv x = Lisp                   x
+liftGlobalEnv x = Lisp       (lift (lift x))
+liftStdout    x = Lisp             (lift x)
+liftStdin     x = Lisp                   x
 
 readCell :: Cell s -> Lisp s (Object s)
 readCell (Cell r) = liftST . readSTRef $ r
