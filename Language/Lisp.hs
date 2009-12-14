@@ -12,7 +12,7 @@ import Data.Maybe
 
 import System.IO hiding (print)
 
-mapLlist :: Function s -> OneParam s
+mapLlist :: Function -> OneParam
 mapLlist f (Cons aC dC) = do
   a <- f =<< readCell aC
   d <- mapLlist f =<< readCell dC
@@ -20,7 +20,7 @@ mapLlist f (Cons aC dC) = do
 mapLlist _ Nil = return Nil
 mapLlist _ _   = error "mapLlist: Not a list."
 
-append :: TwoParam s
+append :: TwoParam
 append Nil           ys = return ys
 append (Cons xC xsC) ys = do
   x  <- readCell xC
@@ -28,7 +28,7 @@ append (Cons xC xsC) ys = do
   append xs ys >>= cons x
 append _             _  = error "append: Not a list."
 
-zipLlists :: TwoParam s
+zipLlists :: TwoParam
 zipLlists Nil           _             = return Nil
 zipLlists _             Nil           = return Nil
 zipLlists (Cons xC xsC) (Cons yC ysC) = do
@@ -41,9 +41,9 @@ zipLlists (Cons xC xsC) (Cons yC ysC) = do
   cons pair rest
 zipLlists _             _             = error "zipLlists: Not a list."
 
-lookupSymbol :: Environment s -> Object s -> Lisp s (Maybe (Cell s))
+lookupSymbol :: Environment -> Object -> Lisp (Maybe Cell)
 lookupSymbol env (Symbol name) = let
-    lookupSymbol' :: Environment s -> Lisp s (Maybe (Cell s))
+    lookupSymbol' :: Environment -> Lisp (Maybe Cell)
     lookupSymbol' Nil                 = return Nothing
     lookupSymbol' (Cons entryC restC) = do
                                    Cons keyC valueC <- readCell entryC
@@ -57,7 +57,7 @@ lookupSymbol env (Symbol name) = let
           Just _  -> return valueCM
 lookupSymbol _   _             = error "lookupSymbol: Not a symbol."
 
-eval :: Environment s -> OneParam s
+eval :: Environment -> OneParam
 eval env symbol@(Symbol name)     = lookupSymbol env symbol >>= maybe (error $ name ++ " not found.") readCell
 eval env        (Cons funC argsC) = do
   fun <- eval env =<< readCell funC
@@ -69,10 +69,10 @@ eval env        (Cons funC argsC) = do
     _                        -> error "eval: Not a functional value."
 eval _          x                 = return x
 
-quote :: Environment s -> OneParam s
+quote :: Environment -> OneParam
 quote _ form = return form
 
-lambda :: Environment s -> TwoParam s
+lambda :: Environment -> TwoParam
 lambda env params body = do
   (params', rest) <- deconstructLlist params
   let f args = do
@@ -83,34 +83,34 @@ lambda env params body = do
         eval env' body
   return (Function f)
 
-defineFunction :: TwoParam s
+defineFunction :: TwoParam
 defineFunction symbol value = do
   envC <- getGlobalEnvironment
   cons symbol value >>= push envC
   return value
 
-car, cdr :: OneParam s
+car, cdr :: OneParam
 car (Cons aC _ ) = readCell aC
 car _            = error "car: Not a cons."
 cdr (Cons _  dC) = readCell dC
 cdr _            = error "cdr: Not a cons."
 
-cons :: TwoParam s
+cons :: TwoParam
 cons a d = liftM2 Cons (newCell a) (newCell d)
 
-macroFunction :: OneParam s
+macroFunction :: OneParam
 macroFunction (Function f) = return $ Macro f
 macroFunction _            = error "macro: Not a function."
 
-apply :: TwoParam s
+apply :: TwoParam
 apply (Function f) args = f args
 apply _            _    = error "apply: Not a function."
 
-macroexpand1 :: TwoParam s
+macroexpand1 :: TwoParam
 macroexpand1 (Macro macro) args = macro args
 macroexpand1 _             _    = error "macroexpand-1: Not a macro."
 
-deconstructLlist :: Object s -> Lisp s (Object s, Object s)
+deconstructLlist :: Object -> Lisp (Object, Object)
 deconstructLlist (Cons aC dC) = do
   a <- readCell aC
   d <- readCell dC
@@ -119,7 +119,7 @@ deconstructLlist (Cons aC dC) = do
   return (d', x)
 deconstructLlist x            = return (Nil, x)
 
-typeOf :: OneParam s
+typeOf :: OneParam
 typeOf Function        {} = return $ Symbol "function"
 typeOf Cons            {} = return $ Symbol "cons"
 typeOf Nil                = return $ Symbol "nil"
@@ -128,13 +128,13 @@ typeOf Symbol          {} = return $ Symbol "symbol"
 typeOf Macro           {} = return $ Symbol "macro"
 typeOf Char            {} = return $ Symbol "char"
 
-ifFunction :: ThreeParam s
+ifFunction :: ThreeParam
 ifFunction Nil (Function _) (Function e) = e Nil
 ifFunction _   (Function t) (Function _) = t Nil
 ifFunction _   _            _            = error "ifFunction: Not a function."
 
-type OneParam s = Object s -> Lisp s (Object s)
-oneParam :: String -> OneParam s -> Function s
+type OneParam = Object -> Lisp Object
+oneParam :: String -> OneParam -> Function
 oneParam fname f args =
   case args of
     Cons arg0C rest0C -> do
@@ -146,8 +146,8 @@ oneParam fname f args =
         _ -> error $ fname ++ ": Expected 1 argument; received more."
     _ -> error $ fname ++ ": Expected 1 argument; received 0."
 
-type TwoParam s = Object s -> Object s -> Lisp s (Object s)
-twoParam :: String -> TwoParam s -> Function s
+type TwoParam = Object -> Object -> Lisp Object
+twoParam :: String -> TwoParam -> Function
 twoParam fname f args =
   case args of
     Cons arg0C rest0C -> do
@@ -164,8 +164,8 @@ twoParam fname f args =
         _ -> error $ fname ++ ": Expected 2 arguments; received 1."
     _ -> error $ fname ++ ": Expected 2 arguments; received 0."
 
-type ThreeParam s = Object s -> Object s -> Object s -> Lisp s (Object s)
-threeParam :: String -> ThreeParam s -> Function s
+type ThreeParam = Object -> Object -> Object -> Lisp Object
+threeParam :: String -> ThreeParam -> Function
 threeParam fname f args =
   case args of
     Cons arg0C rest0C -> do
@@ -187,14 +187,14 @@ threeParam fname f args =
         _ -> error $ fname ++ ": Expected 2 arguments; received 1."
     _ -> error $ fname ++ ": Expected 2 arguments; received 0."
 
-push :: Cell s -> OneParam s
+push :: Cell -> OneParam
 push xsC x = do
   xs  <- readCell xsC
   xs' <- cons x xs
   writeCell xsC xs'
   return xs'
 
-initializeGlobalEnvironment :: Lisp s ()
+initializeGlobalEnvironment :: Lisp ()
 initializeGlobalEnvironment = do
   mapM_ (uncurry defineFunction)
             [ (Symbol "quote"        , SpecialOperator $ \ env -> oneParam "quote"  (quote  env)      )
@@ -209,19 +209,21 @@ initializeGlobalEnvironment = do
             , (Symbol "if-function"  , Function $ threeParam "if-function"   ifFunction               )
             , (Symbol "apply"        , Function $ twoParam   "apply"         apply                    )
             , (Symbol "append"       , Function $ twoParam   "append"        append                   )
-            , (Symbol "define", Function $ twoParam   "define"        defineFunction                   )
+            , (Symbol "define", Function $ twoParam   "define"        defineFunction                  )
             ]
 
 main :: IO ()
-main = getContents >>= putStr . run
+main = do
+  hSetBuffering stdin LineBuffering
+  run
 
 runFile :: FilePath -> IO ()
-runFile file = readFile file >>= putStr . run
+runFile file = run
 
-run :: String -> String
-run = snd . runLisp (initializeGlobalEnvironment >> repl)
+run :: IO ()
+run = runLisp (initializeGlobalEnvironment >> repl)
 
-repl :: Lisp s ()
+repl :: Lisp ()
 repl = do
   form <- read
   case form of
@@ -235,7 +237,7 @@ repl = do
 isWhitespace :: Char -> Bool
 isWhitespace = (`elem` " \t\n")
 
-read :: Lisp s (Object s)
+read :: Lisp Object
 read = do
   c <- readCharacter
   case c of
@@ -259,15 +261,7 @@ read = do
                                     return $ Symbol $ c : token
         | otherwise           -> error $ "RAPE\nby #\\" ++ c : []
 
-{-interpolateForm :: Object -> Object
-interpolateForm form = interpolateForm' form Nil where
-  interpolateForm' :: Object -> Object -> Object
-  interpolateForm' (Cons (Symbol "comma"       ) (Cons form Nil)) k = Cons (Cons (Symbol "cons"  ) $ Cons form k) Nil
-  interpolateForm' (Cons (Symbol "comma-splice") (Cons form Nil)) k = Cons (Cons (Symbol "append") $ Cons form k) Nil
-  interpolateForm' (Cons a                       d              ) k = interpolateForm' a $ interpolateForm' d k
-  interpolateForm' form                                           k = Cons (Cons (Symbol "cons"  ) $ Cons (Cons (Symbol "quote") $ Cons form Nil) k) Nil-}
-
-skipWhitespace :: Lisp s ()
+skipWhitespace :: Lisp ()
 skipWhitespace = do
   c <- peekCharacter
   when (isWhitespace c) (readCharacter >> skipWhitespace)
@@ -275,7 +269,7 @@ skipWhitespace = do
 isSymbolCharacter :: Char -> Bool
 isSymbolCharacter = (`elem` ['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ "+-*/")
 
-readToken :: Lisp s String
+readToken :: Lisp String
 readToken = do
   c <- peekCharacter
   if isSymbolCharacter c
@@ -284,7 +278,7 @@ readToken = do
             return $ c : token
     else return ""
 
-readDelimitedList :: Char -> Char -> Lisp s (Object s)
+readDelimitedList :: Char -> Char -> Lisp Object
 readDelimitedList c d = do
   skipWhitespace
   c' <- peekCharacter
@@ -299,7 +293,7 @@ readDelimitedList c d = do
                  rest <- readDelimitedList c d
                  cons object rest
 
-print :: OneParam s
+print :: OneParam
 print x = do
   case x of
     Function _ -> writeString "#<function>"
