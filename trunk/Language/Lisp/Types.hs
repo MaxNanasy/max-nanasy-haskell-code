@@ -9,22 +9,22 @@ import Control.Monad.State
 import Control.Monad.ST
 import Data.STRef
 
-data Object s = SpecialOperator (SpecialOperator s)
-              | Macro           (Macro           s)
-              | Function        (Function        s)
-              | Cons (Cell s) (Cell s)
+data Object = | SpecialOperator (SpecialOperator)
+              | Macro           (Macro          )
+              | Function        (Function       )
+              | Cons (Cell) (Cell)
               | Nil
-              | Symbol String
+              |ymboltring
               | Char Char
 
-newtype Lisp s a = Lisp { unLisp :: StateT Stream (WriterT Stream (ReaderT (Cell s) (ST s))) a } deriving Monad
+newtype Lisp a = Lisp { unLisp :: ReaderT Cell IO a } deriving Monad
 
-type Stream = [Char]
+typetream = [Char]
 
-type Function        s = Object s -> Lisp s (Object s)
-type Macro           s = Function s
-type SpecialOperator s = Environment s -> Function s
+type Function      = Object -> Lisp (Object)
+type Macro         = Function
+typepecialOperator = Environment -> Function
 
-type Environment s = [(Object s, Object s)]
+type Environment = Object
 
-newtype Cell s = Cell (STRef s (Object s))
+newtype Cell = Cell (STRef (Object))
