@@ -2,29 +2,25 @@
 
 module Language.Lisp.Types where
 
-import Control.Monad.Identity
 import Control.Monad.Reader
-import Control.Monad.Writer
-import Control.Monad.State
-import Control.Monad.ST
-import Data.STRef
+import Data.IORef
 
-data Object = | SpecialOperator (SpecialOperator)
+data Object =   SpecialOperator (SpecialOperator)
               | Macro           (Macro          )
               | Function        (Function       )
               | Cons (Cell) (Cell)
               | Nil
-              |ymboltring
+              | Symbol String
               | Char Char
 
-newtype Lisp a = Lisp { unLisp :: ReaderT Cell IO a } deriving Monad
+newtype Lisp a = Lisp { unLisp :: ReaderT Cell IO a } deriving (Monad, MonadIO)
 
-typetream = [Char]
+type Stream = [Char]
 
-type Function      = Object -> Lisp (Object)
-type Macro         = Function
-typepecialOperator = Environment -> Function
+type Function        = Object -> Lisp Object
+type Macro           = Function
+type SpecialOperator = Environment -> Function
 
 type Environment = Object
 
-newtype Cell = Cell (STRef (Object))
+newtype Cell = Cell (IORef Object)

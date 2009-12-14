@@ -5,46 +5,39 @@ module Language.Lisp.Monad where
 import Language.Lisp.Types
 
 import Control.Monad.Reader
-import Control.Monad.Writer
-import Control.Monad.State
-import Control.Monad.ST
-import Data.STRef
+import Data.IORef
 
-runLisp :: (forall s. Lisp s a) -> Stream -> (a, Stream)
-runLisp c s = runST (do
-                      envC <- liftM Cell $ newSTRef Nil
-                      runReaderT (runWriterT (evalStateT (unLisp c) s)) envC)
+import System.IO
 
-liftST        x = Lisp (lift (lift (lift x)))
-liftGlobalEnv x = Lisp       (lift (lift x))
-liftStdout    x = Lisp             (lift x)
-liftStdin     x = Lisp                   x
+runLisp :: Lisp a -> IO a
+runLisp c = do
+  envC <- liftM Cell $ newIORef Nil
+  runReaderT (unLisp c) envC
 
-readCell :: Cell s -> Lisp s (Object s)
-readCell (Cell r) = liftST . readSTRef $ r
+liftGlobalEnv x = Lisp x
 
-writeCell :: Cell s -> Object s -> Lisp s ()
-writeCell (Cell r) = liftST . writeSTRef r
+readCell :: Cell -> Lisp Object
+readCell  (Cell c) = liftIO . readIORef $ c
 
-newCell :: Object s -> Lisp s (Cell s)
+writeCell :: Cell -> Object -> Lisp ()
+writeCell (Cell c) = liftIO . writeIORef c
+
+newCell :: Object -> Lisp Cell
 newCell x = do
-  xR <- liftST $ newSTRef x
-  return $ Cell xR
+  xC <- liftIO $ newIORef x
+  return $ Cell xC
 
-readCharacter :: Lisp s Char
-readCharacter = do 
-  (c : cs) <- liftStdin get
-  liftStdin $ put cs
-  return c
+readCharacter :: Lisp Char
+readCharacter = liftIO getChar 
 
-peekCharacter :: Lisp s Char
-peekCharacter = liftStdin $ gets head
+peekCharacter :: Lisp Char
+peekCharacter = liftIO $ hLookAhead stdin
 
-writeCharacter :: Char -> Lisp s ()
-writeCharacter = liftStdout . tell . (:[])
+writeCharacter :: Char -> Lisp ()
+writeCharacter = liftIO . putChar
 
-writeString :: String -> Lisp s ()
-writeString = liftStdout . tell
+writeString :: String -> Lisp ()
+writeString = liftIO . putStr
 
-getGlobalEnvironment :: Lisp s (Cell s)
+getGlobalEnvironment :: Lisp Cell
 getGlobalEnvironment = liftGlobalEnv ask
