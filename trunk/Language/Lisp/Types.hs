@@ -3,24 +3,36 @@
 module Language.Lisp.Types where
 
 import Control.Monad.Reader
+import Control.Monad.State
+import Control.Monad.Cont
 import Data.IORef
+import System.IO
 
-data Object =   SpecialOperator (SpecialOperator)
-              | Macro           (Macro          )
-              | Function        (Function       )
-              | Cons (Cell) (Cell)
-              | Nil
-              | Symbol String
-              | Char Char
+data Idd a = Idd a Identifier
 
-newtype Lisp a = Lisp { unLisp :: ReaderT Cell IO a } deriving (Monad, MonadIO)
+instance Eq (Idd a) where
+    (Idd _ id0) == (Idd _ id1) = id0 == id1
 
-type Stream = [Char]
+data Object = SpecialOperator SpecialOperator
+            | Macro           Macro
+            | Function        Function
+            | Cons            Cell Cell
+            | Nil
+            | Symbol          String
+            | Char            Char
+            | Stream          Stream
+              deriving (Eq)
 
-type Function        = Object -> Lisp Object
+newtype Lisp a = Lisp { unLisp :: ReaderT Environment (ReaderT Cell (StateT Identifier (ContT Object IO))) a } deriving (Monad, MonadIO, MonadCont)
+
+type Stream = Handle
+
+type Function        = Idd (Object -> Lisp Object)
 type Macro           = Function
-type SpecialOperator = Environment -> Function
+type SpecialOperator = Idd (Environment -> Object -> Lisp Object)
+
+type Identifier = Integer
 
 type Environment = Object
 
-newtype Cell = Cell (IORef Object)
+newtype Cell = Cell (Idd (IORef Object)) deriving (Eq)
