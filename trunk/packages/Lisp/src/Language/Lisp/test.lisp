@@ -40,8 +40,6 @@
 (define print (lambda (x stream) (sequence (write-char #\
  stream) (write x stream) (write-char #\  stream) x)))
 
-(define read-debug (open-file (quote read-debug)))
-
 (define old-read read)
 (define make-char-reader (lambda (char form) (cons char (lambda (stream) (list form (read stream))))))
 (define comma-reader (lambda (stream)
@@ -97,11 +95,11 @@
 
 (load-file 'loadable)
 
-(print print-twice *standard-output*)
-
 (define repl (lambda ()
                (sequence
                 (print (eval (read %*standard-input*)) %*standard-output*)
+                (write-char #\
+ %*standard-output*)
                 (repl))))
 (repl)
 

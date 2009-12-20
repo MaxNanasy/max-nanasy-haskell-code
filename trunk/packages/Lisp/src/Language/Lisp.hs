@@ -1,4 +1,4 @@
-module Language.Lisp (main) where
+module Language.Lisp (run) where
 
 import Language.Lisp.Types
 import           Language.Lisp.Monad hiding (writeString)
@@ -14,7 +14,6 @@ import Control.Monad
 import Data.List
 import Data.Maybe
 
-import System.Environment
 import           System.IO hiding (openFile)
 import qualified System.IO as SI
 
@@ -238,20 +237,6 @@ listToLlist = foldM (flip cons) Nil . reverse
 
 listToEnv :: [(String, Lisp Object)] -> Lisp Object
 listToEnv = mapM (\ (name, valueM) -> valueM >>= cons (Symbol name)) >=> listToLlist
-
-main :: IO ()
-main = do
-  hSetBuffering stdin LineBuffering
-  args <- getArgs
-  case args of
-    []     -> run stdin stdin stdout stderr
-    [file] -> runFile file
-    _      -> P.error $ "Expected [0, 1] arguments; received " ++ (show $ length args) ++ "."
-
-runFile :: FilePath -> IO ()
-runFile file = do
-  replStream <- SI.openFile file ReadMode
-  run replStream stdin stdout stderr
 
 initialStreams :: Stream -> Stream -> Stream -> [(String, Lisp Object)]
 initialStreams stdIn stdOut stdErr = [ ("*standard-input*" , return $ Stream stdIn )
