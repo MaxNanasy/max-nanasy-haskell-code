@@ -1,0 +1,8 @@
+Name:           lisp
+Version:        0
+Build-Type:     Simple
+Cabal-Version:  >= 1.2
+
+Executable lisp
+  Main-Is: Language.Lisp.hs
+  Hs-Source-Dirs: ../..
