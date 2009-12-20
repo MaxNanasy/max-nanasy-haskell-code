@@ -17,6 +17,20 @@ import Data.Maybe
 import           System.IO hiding (openFile)
 import qualified System.IO as SI
 
+dummyID :: Identifier
+dummyID = -1
+
+{-type Index = Int
+
+data CompiledForm = Literal             Object
+                  | LexicalReference    Index
+                  | GlobalReference     Object
+                  | FunctionApplication CompiledForm [CompiledForm]
+
+compileForm :: Environment -> Object -> Lisp Object
+compileForm env symbol@(Symbol name) = LexicalReference $ lookupSymbol env symbol
+compileForm env        (Cons f xs)   = undefined-}
+
 eval :: Environment -> OneParam
 eval env symbol@(Symbol name)     = lookupSymbol env symbol >>= maybe (error $ name ++ " not found.") readCell
 eval env  _form@(Cons funC argsC) = do
@@ -24,7 +38,7 @@ eval env  _form@(Cons funC argsC) = do
   args <- readCell argsC
   case fun of
     SpecialOperator (Idd operator _) -> operator env args
-    Function        (Idd function _) -> function =<< mapLlist (Function (Idd (eval env) undefined)) args
+    Function        (Idd function _) -> function =<< mapLlist (Function (Idd (eval env) dummyID)) args
     Macro           (Idd macro    _) -> macro args >>= eval env
     _                                -> error "eval: Not a functional value."
 {-                                      writeString "eval: "
@@ -363,7 +377,7 @@ defaultWrite x stream = do
   case x of
     Function (Idd _ n) -> do
                    writeString' "#<function "
---                   writeString' $ show n
+                   writeString' $ show n
                    writeChar' $ Char '>'
     Macro    (Idd _ n) -> do
                    writeString' "#<macro "
@@ -380,7 +394,7 @@ defaultWrite x stream = do
                     (list, dot) <- deconstructLlist d
                     writeChar' $ Char '('
                     write' a
-                    mapLlist (Function (Idd (\ z -> writeChar' (Char ' ') >> write' z) undefined)) list
+                    mapLlist (Function (Idd (\ z -> writeChar' (Char ' ') >> write' z) dummyID)) list
                     case dot of
                       Nil -> return ()
                       _   -> writeString' " . " >> write' dot >> return ()

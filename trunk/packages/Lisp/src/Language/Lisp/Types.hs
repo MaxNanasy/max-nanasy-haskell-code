@@ -8,7 +8,7 @@ import Control.Monad.Cont
 import Data.IORef
 import System.IO
 
-data Idd a = Idd a Identifier
+data Idd a = Idd a !Identifier
 
 instance Eq (Idd a) where
     (Idd _ id0) == (Idd _ id1) = id0 == id1
