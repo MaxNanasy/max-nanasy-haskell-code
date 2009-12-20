@@ -241,7 +241,11 @@ listToEnv = mapM (\ (name, valueM) -> valueM >>= cons (Symbol name)) >=> listToL
 main :: IO ()
 main = do
   hSetBuffering stdin LineBuffering
-  run stdin stdin stdout stderr
+  args <- getArgs
+  case args of
+    []     -> run stdin stdin stdout stderr
+    [file] -> runFile file
+    _      -> error "Expected [0, 1] arguments; received " ++ length args ++ "."
 
 runFile :: FilePath -> IO ()
 runFile file = do
