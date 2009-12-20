@@ -4,5 +4,5 @@ Build-Type:     Simple
 Cabal-Version:  >= 1.2
 
 Executable lisp
-  Main-Is: Language.Lisp.hs
-  Hs-Source-Dirs: ../..
+  Hs-Source-Dirs: src
+  Build-Depends : base, mtl
