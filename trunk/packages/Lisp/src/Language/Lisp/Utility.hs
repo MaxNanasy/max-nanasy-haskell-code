@@ -1,4 +1,4 @@
-module Language.Lisp.Utility (mapLlist, append, zipLlists, lookupSymbol) where
+module Language.Lisp.Utility (mapLlist, append, zipLlists, lookupSymbol, lookupByName) where
 
 import Language.Lisp.Types
 import Language.Lisp.Monad
@@ -37,18 +37,37 @@ zipLlists (Cons xC xsC) (Cons yC ysC) = do
   cons pair rest
 zipLlists _             _             = error "zipLlists: Not a list."
 
+listEqual :: Object -> Object -> Lisp Bool
+Nil         `listEqual` Nil       = return True
+Cons xC xsC `listEqual` Cons yC ysC = do
+  x  <- readCell xC
+  y  <- readCell yC
+  xs <- readCell xsC
+  ys <- readCell ysC
+  liftM (x == y &&) (xs `listEqual` ys)
+_           `listEqual` _         = return False
+
+lookupByName :: Environment -> Object -> Lisp (Maybe Object)
+lookupByName Nil                 _                = return Nothing
+lookupByName (Cons entryC restC) (NewType _ name) = do
+  entry@(Cons keyC _)      <- readCell entryC
+  Symbol (NewType _ name') <- readCell keyC
+  found <- name `listEqual` name'
+  if found then return $ Just entry else readCell restC >>= flip lookupByName name
+lookupByName _                   _                = error "lookupSymbol: Some manner of type error."
+
 lookupSymbol :: Environment -> Object -> Lisp (Maybe Cell)
-lookupSymbol env (Symbol name) = let
+lookupSymbol env symbol = let
     lookupSymbol' :: Environment -> Lisp (Maybe Cell)
     lookupSymbol' Nil                 = return Nothing
     lookupSymbol' (Cons entryC restC) = do
-                                   Cons keyC valueC <- readCell entryC
-                                   Symbol name'     <- readCell keyC
-                                   if name == name' then return $ Just valueC else readCell restC >>= lookupSymbol'
+                            Cons keyC valueC <- readCell entryC
+                            key              <- readCell keyC
+                            if symbol == key then return $ Just valueC else readCell restC >>= lookupSymbol'
     lookupSymbol' _                   = error "lookupSymbol: Environment is not a list."
-  in do gEnv <- getGlobalEnvironment >>= readCell
-        valueCM <- lookupSymbol' env
-        case valueCM of
-          Nothing -> lookupSymbol' gEnv
-          Just _  -> return valueCM
-lookupSymbol _   _             = error "lookupSymbol: Not a symbol."
+  in do
+    gEnv <- getGlobalEnvironment >>= readCell
+    valueCM <- lookupSymbol' env
+    case valueCM of
+      Nothing -> lookupSymbol' gEnv
+      Just _  -> return valueCM

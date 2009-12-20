@@ -27,9 +27,9 @@ data CompiledForm = Literal             Object
                   | GlobalReference     Object
                   | FunctionApplication CompiledForm [CompiledForm]
 
-compileForm :: Environment -> Object -> Lisp Object
-compileForm env symbol@(Symbol name) = LexicalReference $ lookupSymbol env symbol
-compileForm env        (Cons f xs)   = undefined-}
+compileForm :: Environment -> Object -> Lisp CompiledForm
+compileForm env symbol@(Symbol _name) = return $ LexicalReference $ undefined lookupSymbol env symbol
+compileForm _env        (Cons _f _xs) = undefined-}
 
 eval :: Environment -> OneParam
 eval env symbol@(Symbol name)     = lookupSymbol env symbol >>= maybe (error $ name ++ " not found.") readCell
@@ -145,6 +145,16 @@ ifFunction Nil (Function _)         (Function (Idd e _)) = e Nil
 ifFunction _   (Function (Idd t _)) (Function _)         = t Nil
 ifFunction _   _                    _                    = error "ifFunction: Not a function."
 
+intern :: OneParam
+intern name = do
+  env <- getGlobalEnvironment
+  Just (Cons _ tableC) <- stringify "*intern-table*" >>= lookupByName
+  table <- readCell tableC
+  symbolCoM <- lookupByName table name
+  case symbolCoM of
+    Just symbolCo -> car symbolCo
+    Nothing       -> cons (Symbol name) (Symbol name) >>= push tableC
+
 type ZeroParam = Lisp Object
 zeroParam :: String -> ZeroParam -> Lisp Object
 zeroParam fname f = incrementIdCounter >>=
@@ -231,7 +241,6 @@ initializeGlobalEnvironment stdIn stdOut stdErr = do
              , ("macro-function", oneParam   "macro-function" macroToFunction)
              , ("if-function"   , threeParam "if-function"   ifFunction      )
              , ("apply"         , twoParam   "apply"         apply           )
-             , ("append"        , twoParam   "append"        append          )
              , ("define-symbol" , twoParam   "define-symbol" defineSymbol    )
              , ("dynamic-value" , oneParam   "dynamic-value" dynamicValue    )
              , ("with-dynamic-bindings" , threeParam   "with-dynamic-bindings" withDynamicBindingsFunction)
@@ -249,8 +258,26 @@ initializeGlobalEnvironment stdIn stdOut stdErr = do
 listToLlist :: [Object] -> Lisp Object
 listToLlist = foldM (flip cons) Nil . reverse
 
+stringify :: String -> Lisp Object
+stringify = listToLlist >=> liftM NewType 
+
+llistToList :: Object -> Lisp ([Object], Maybe Object)
+llistToList (Cons xC xsC) = do
+  x  <- readCell xC
+  xs <- readCell xsC
+  (list, dot) <- llistToList xs
+  return (x : list, dot)
+llistToList Nil           = return ([], Nothing)
+llistToList x             = return ([], Just x )
+
+unStringify :: Object -> Lisp String
+unStringify = liftM (map (\ (Char c) -> c) . fst) . llistToList
+
 listToEnv :: [(String, Lisp Object)] -> Lisp Object
-listToEnv = mapM (\ (name, valueM) -> valueM >>= cons (Symbol name)) >=> listToLlist
+listToEnv = mapM (\ (name, valueM) -> do
+                    name' <- intern =<< stringify name
+                    value <- valueM
+                    cons name' value) >=> listToLlist
 
 initialStreams :: Stream -> Stream -> Stream -> [(String, Lisp Object)]
 initialStreams stdIn stdOut stdErr = [ ("*standard-input*" , return $ Stream stdIn )
@@ -281,7 +308,7 @@ isWhitespace = (`elem` " \t\n")
 
 read :: OneParam
 read stream = do
-  Function (Idd f _) <- dynamicValue $ Symbol "read"
+  Function (Idd f _) <- dynamicValue =<< intern =<< stringify "read"
   f =<< cons stream Nil
 
 defaultRead :: OneParam
@@ -292,16 +319,6 @@ defaultRead stream = do
     Char c -> case c of
       '(' -> do
         readDelimitedList ')' '.' stream
-      {-'`' -> do
-        object <- read
-        cons (Symbol "quasiquote") =<< cons object Nil
-      ',' -> do
-        c' <- peekChar
-        symbolName <- case c' of
-          '@' -> readChar >> return "comma-splice"
-          _   ->             return "comma"
-        form <- read
-        cons (Symbol symbolName) =<< cons form Nil-}
       '#' -> do
            c' <- readChar stream
            case c' of
@@ -310,7 +327,7 @@ defaultRead stream = do
              _         -> error $ "EOF RAPE"
       _ | isWhitespace      c -> read stream
         | isSymbolCharacter c -> do token <- readToken stream
-                                    return $ Symbol $ c : token
+                                    intern =<< stringify (c : token)
         | otherwise           -> error $ "RAPE\nby #\\" ++ c : []
     _ -> undefined
 
@@ -349,8 +366,7 @@ readDelimitedList c d stream = do
                  cons object rest
 
 openFile :: OneParam
-openFile (Symbol name) = liftIO $ liftM Stream $ SI.openFile name ReadWriteMode
-openFile _             = error "openFile: Not a symbol."
+openFile name = liftIO . liftM Stream . flip SI.openFile ReadWriteMode =<< unStringify name
 
 lookupSymbolDynamically :: Object -> Lisp (Maybe Cell)
 lookupSymbolDynamically symbol = do
@@ -369,7 +385,7 @@ writeString _      _               = error "write-string: Not a stream."
 
 write :: TwoParam
 write x stream = do
-  Function (Idd f _) <- dynamicValue $ Symbol "write"
+  Function (Idd f _) <- dynamicValue =<< intern =<< stringify "write"
   f =<< cons x =<< cons stream Nil
 
 defaultWrite :: TwoParam
