@@ -14,6 +14,7 @@ import Control.Monad
 import Data.List
 import Data.Maybe
 
+import System.Environment
 import           System.IO hiding (openFile)
 import qualified System.IO as SI
 
@@ -245,7 +246,7 @@ main = do
   case args of
     []     -> run stdin stdin stdout stderr
     [file] -> runFile file
-    _      -> error "Expected [0, 1] arguments; received " ++ length args ++ "."
+    _      -> P.error $ "Expected [0, 1] arguments; received " ++ (show $ length args) ++ "."
 
 runFile :: FilePath -> IO ()
 runFile file = do
