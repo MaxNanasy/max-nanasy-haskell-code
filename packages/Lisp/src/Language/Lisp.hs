@@ -32,7 +32,7 @@ compileForm env symbol@(Symbol _name) = return $ LexicalReference $ undefined lo
 compileForm _env        (Cons _f _xs) = undefined-}
 
 eval :: Environment -> OneParam
-eval env symbol@(Symbol name)     = lookupSymbol env symbol >>= maybe (error $ name ++ " not found.") readCell
+eval env symbol@(Symbol _name)    = lookupSymbol env symbol >>= readCell . fromJust
 eval env  _form@(Cons funC argsC) = do
   fun <- eval env =<< readCell funC
   args <- readCell argsC
@@ -74,16 +74,13 @@ set    = incrementIdCounter >>= return . SpecialOperator . Idd (\ env (Cons sC r
                                                               writeCell xC v
                                                               return v)
 
-withDynamicBindingsFunction :: ThreeParam
-withDynamicBindingsFunction symbols values (Function (Idd f _)) = zipLlists symbols values >>= flip withAugmentedDynamicEnvironment (f Nil)
-withDynamicBindingsFunction _       _      _                    = error "with-dynamic-bindings: Not a function."
+withDynamicBindings :: ThreeParam
+withDynamicBindings symbols values (Function (Idd f _)) = zipLlists symbols values >>= flip withAugmentedDynamicEnvironment (f Nil)
+withDynamicBindings _       _      _                    = error "with-dynamic-bindings: Not a function."
 
 dynamicValue :: OneParam
-dynamicValue symbol@(Symbol name) = lookupSymbolDynamically symbol >>= maybe (error $ name ++ " not dynamically found.") readCell
-dynamicValue x                     = return x
-
-withDynamicBindings :: [(String, Lisp Object)] -> Lisp a -> Lisp a
-withDynamicBindings b c = listToEnv b >>= flip withAugmentedDynamicEnvironment c
+dynamicValue symbol = lookupSymbolDynamically symbol >>= readCell . fromJust
+--dynamicValue x                     = return x
 
 defineSymbol :: TwoParam
 defineSymbol symbol value = do
@@ -92,10 +89,10 @@ defineSymbol symbol value = do
   return value
 
 error :: String -> Lisp b
-error message = do
-  stdErr <- dynamicValue $ Symbol "*standard-error*"
-  writeString "ERROR: " stdErr >> writeString message stdErr >> writeChar (Char '\n') stdErr
-  P.error ""
+error message =
+{-  stdErr <- dynamicValue =<< intern =<< stringify "*standard-error*"
+  writeString "ERROR: " stdErr >> writeString message stdErr >> writeChar (Char '\n') stdErr-}
+  P.error message
 
 car, cdr :: OneParam
 car (Cons aC _ ) = readCell aC
@@ -128,17 +125,18 @@ deconstructLlist (Cons aC dC) = do
 deconstructLlist x            = return (Nil, x)
 
 typeOf :: OneParam
-typeOf Function        {} = return $ Symbol "function"
-typeOf Cons            {} = return $ Symbol "cons"
-typeOf Nil                = return $ Symbol "nil"
-typeOf SpecialOperator {} = return $ Symbol "special-operator"
-typeOf Symbol          {} = return $ Symbol "symbol"
-typeOf Macro           {} = return $ Symbol "macro"
-typeOf Char            {} = return $ Symbol "char"
-typeOf Stream          {} = return $ Symbol "stream"
+typeOf Function        {} = intern =<< stringify "function"
+typeOf Cons            {} = intern =<< stringify "cons"
+typeOf Nil                = intern =<< stringify "nil"
+typeOf SpecialOperator {} = intern =<< stringify "special-operator"
+typeOf Symbol          {} = intern =<< stringify "symbol"
+typeOf Macro           {} = intern =<< stringify "macro"
+typeOf Char            {} = intern =<< stringify "char"
+typeOf Stream          {} = intern =<< stringify "stream"
+typeOf (NewType t _)      = return t
 
 eq :: TwoParam
-x `eq` y = return $ if x == y then (Symbol "true") else Nil
+x `eq` y = if x == y then intern =<< stringify "true" else return Nil
 
 ifFunction :: ThreeParam
 ifFunction Nil (Function _)         (Function (Idd e _)) = e Nil
@@ -147,12 +145,12 @@ ifFunction _   _                    _                    = error "ifFunction: No
 
 intern :: OneParam
 intern name = do
-  env <- getGlobalEnvironment
-  Just (Cons _ tableC) <- stringify "*intern-table*" >>= lookupByName
+  env <- getGlobalEnvironment >>= readCell
+  Cons _ tableC <- stringify "*intern-table*" >>= lookupByName env >>= readCell . fromJust
   table <- readCell tableC
   symbolCoM <- lookupByName table name
   case symbolCoM of
-    Just symbolCo -> car symbolCo
+    Just symbolCo -> car =<< readCell symbolCo
     Nothing       -> cons (Symbol name) (Symbol name) >>= push tableC
 
 type ZeroParam = Lisp Object
@@ -243,7 +241,7 @@ initializeGlobalEnvironment stdIn stdOut stdErr = do
              , ("apply"         , twoParam   "apply"         apply           )
              , ("define-symbol" , twoParam   "define-symbol" defineSymbol    )
              , ("dynamic-value" , oneParam   "dynamic-value" dynamicValue    )
-             , ("with-dynamic-bindings" , threeParam   "with-dynamic-bindings" withDynamicBindingsFunction)
+             , ("with-dynamic-bindings", threeParam   "with-dynamic-bindings" withDynamicBindings)
              , ("write-char"    , twoParam   "write-char"    writeChar       )
              , ("read-char"     , oneParam   "read-char"     readChar        )
              , ("peek-char"     , oneParam   "peek-char"     peekChar        )
@@ -259,7 +257,7 @@ listToLlist :: [Object] -> Lisp Object
 listToLlist = foldM (flip cons) Nil . reverse
 
 stringify :: String -> Lisp Object
-stringify = listToLlist >=> liftM NewType 
+stringify string = liftM2 NewType (intern =<< stringify "string") (listToLlist $ map Char string)
 
 llistToList :: Object -> Lisp ([Object], Maybe Object)
 llistToList (Cons xC xsC) = do
@@ -271,7 +269,7 @@ llistToList Nil           = return ([], Nothing)
 llistToList x             = return ([], Just x )
 
 unStringify :: Object -> Lisp String
-unStringify = liftM (map (\ (Char c) -> c) . fst) . llistToList
+unStringify (NewType _ string) = liftM (map (\ (Char c) -> c) . fst) $ llistToList string
 
 listToEnv :: [(String, Lisp Object)] -> Lisp Object
 listToEnv = mapM (\ (name, valueM) -> do
@@ -379,8 +377,8 @@ writeChar ch@(Char c) (Stream stream)  = do
   return ch
 writeChar _           _                = error "write-char: Not a character or not a stream."
 
-writeString :: String -> Object -> Lisp ()
-writeString string (Stream stream) = LLM.writeString stream string
+writeString :: TwoParam
+writeString string (Stream stream) = unStringify string >>= LLM.writeString stream >> return string
 writeString _      _               = error "write-string: Not a stream."
 
 write :: TwoParam
@@ -392,16 +390,16 @@ defaultWrite :: TwoParam
 defaultWrite x stream = do
   case x of
     Function (Idd _ n) -> do
-                   writeString' "#<function "
-                   writeString' $ show n
+                   writeString' =<< stringify "#<function "
+                   writeString' =<< stringify (show n)
                    writeChar' $ Char '>'
     Macro    (Idd _ n) -> do
-                   writeString' "#<macro "
-                   writeString' $ show n
+                   writeString' =<< stringify "#<macro "
+                   writeString' =<< stringify (show n)
                    writeChar' $ Char '>'
     SpecialOperator (Idd _ n) -> do
-                   writeString' "#<special-operator "
-                   writeString' $ show n
+                   writeString' =<< stringify "#<special-operator "
+                   writeString' =<< stringify (show n)
                    writeChar' $ Char '>'
     Cons aC dC -> do
            a <- readCell aC
@@ -413,9 +411,10 @@ defaultWrite x stream = do
                     mapLlist (Function (Idd (\ z -> writeChar' (Char ' ') >> write' z) dummyID)) list
                     case dot of
                       Nil -> return ()
-                      _   -> writeString' " . " >> write' dot >> return ()
+                      _   -> stringify " . " >>= writeString' >> write' dot >> return ()
                     writeChar' $ Char ')'
-           case d of
+           writeNormally
+           {- case d of
              Cons formC nilC -> do
                      nil <- readCell nilC
                      case nil of
@@ -436,11 +435,16 @@ defaultWrite x stream = do
                                   write' form
                            _ -> writeNormally >> return a
                        _  -> writeNormally
-             _ -> writeNormally
-    Nil           -> writeString' "()" >> return Nil
+             _ -> writeNormally-}
+    Nil           -> stringify "()" >>= writeString' >> return Nil
     Symbol name   -> writeString' name >> return Nil
-    Char char     -> writeString' "#\\" >> writeChar' (Char char)
-    Stream _      -> writeString' "#<stream>" >> return Nil
+    Char char     -> stringify "#\\" >>= writeString' >> writeChar' (Char char)
+    Stream _      -> stringify "#<stream>" >>= writeString' >> return Nil
+    NewType t x   -> do
+           writeChar' $ Char '@'
+           write' t
+           writeChar' $ Char ' '
+           write' x
   return x where
       writeString' = flip writeString stream
       writeChar'   = flip writeChar   stream
