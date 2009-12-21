@@ -1,3 +1,6 @@
+(write *intern-table* *standard-output*)
+(write-char #\
+ *standard-output*)
 (define-symbol (quote list) (lambda xs xs))
 
 (define-symbol (quote define) (macro (lambda (name value)
@@ -48,12 +51,19 @@
                                    (sequence (read-char stream) (quote unquote-splice))
                                  (quote unquote)) (read stream)))))
 (define eof-reader (lambda (stream) ((dynamic *read-eof*))))
+(define double-quote-reader (lambda (stream) (new-type 'string (read-delimited-string #\" stream))))
+(define read-delimited-string (lambda (char stream)
+                                (let ((c (read-char stream)))
+                                  (if (eq c char)
+                                      ()
+                                    (cons c (read-delimited-string char stream))))))
 
-(define *reader-dispatch-table* (list (make-char-reader #\' (quote quote         ))
-                                      (make-char-reader #\` (quote quasiquote    ))
-                                      (cons             #\, comma-reader          )
-                                      (make-char-reader #\% (quote dynamic       ))
-                                      (cons             ()  eof-reader           )))
+(define *reader-dispatch-table* (list (make-char-reader #\' (quote quote       ))
+                                      (make-char-reader #\` (quote quasiquote  ))
+                                      (cons             #\, comma-reader       )
+                                      (make-char-reader #\% (quote dynamic     ))
+                                      (cons             ()  eof-reader         )
+                                      (cons             #\" double-quote-reader)))
 (set read (lambda (stream)
             (let ((char (peek-char stream)))
               (let ((dispatch-function (lookup char *reader-dispatch-table*)))
@@ -93,7 +103,7 @@
                                                            (k ()))))
                                             (load-stream (open-file name)))))))
 
-(load-file 'loadable)
+(load-file "src/Test/loadable")
 
 (define repl (lambda ()
                (sequence
