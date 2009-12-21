@@ -47,14 +47,15 @@ Cons xC xsC `listEqual` Cons yC ysC = do
   liftM (x == y &&) (xs `listEqual` ys)
 _           `listEqual` _         = return False
 
-lookupByName :: Environment -> Object -> Lisp (Maybe Object)
-lookupByName Nil                 _                = return Nothing
-lookupByName (Cons entryC restC) (NewType _ name) = do
-  entry@(Cons keyC _)      <- readCell entryC
-  Symbol (NewType _ name') <- readCell keyC
-  found <- name `listEqual` name'
-  if found then return $ Just entry else readCell restC >>= flip lookupByName name
-lookupByName _                   _                = error "lookupSymbol: Some manner of type error."
+lookupByName :: Environment -> Object -> Lisp (Maybe Cell)
+lookupByName Nil                      _                 = return Nothing
+lookupByName (Cons entryC restC) name@(NewType _ name') = do
+  Cons keyC valueC <- readCell entryC
+  Symbol (NewType _ name'') <- readCell keyC
+  found <- name' `listEqual` name''
+  if found then return $ Just valueC else readCell restC >>= flip lookupByName name
+lookupByName _                   NewType {}       = error "lookupByName: Environment is not a list."
+lookupByName _                   _                = error "lookupByName: Not a string."
 
 lookupSymbol :: Environment -> Object -> Lisp (Maybe Cell)
 lookupSymbol env symbol = let
