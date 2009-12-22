@@ -1,6 +1,3 @@
-(write *intern-table* *standard-output*)
-(write-char #\
- *standard-output*)
 (define-symbol (quote list) (lambda xs xs))
 
 (define-symbol (quote define) (macro (lambda (name value)
@@ -51,7 +48,7 @@
                                    (sequence (read-char stream) (quote unquote-splice))
                                  (quote unquote)) (read stream)))))
 (define eof-reader (lambda (stream) ((dynamic *read-eof*))))
-(define double-quote-reader (lambda (stream) (new-type 'string (read-delimited-string #\" stream))))
+(define double-quote-reader (lambda (stream) (new-type (quote string) (read-delimited-string #\" stream))))
 (define read-delimited-string (lambda (char stream)
                                 (let ((c (read-char stream)))
                                   (if (eq c char)
@@ -103,7 +100,15 @@
                                                            (k ()))))
                                             (load-stream (open-file name)))))))
 
-(load-file "src/Test/loadable")
+(define write-string (lambda (string stream)
+                       (map (lambda (x) (write-char x stream)) (un-new-type string))))
+(define write-line (lambda (string stream)
+                     (sequence (write-string string stream)
+                               (write-char #\
+ stream))))
+
+(write-line "REPL" *standard-output*)
+(write-line "----" *standard-output*)
 
 (define repl (lambda ()
                (sequence
@@ -116,32 +121,3 @@
 END
 
 (quit)
-
-(quasiquote-form '((lambda ,(map car bindings)
-                     ,body) ,@(map cadr bindings)))
-(let ((bindings '((x a) (y b))) (body '(z x y))) `((lambda ,(map car bindings)
-                                                     ,body) ,@(map cadr bindings)))
-
-(define let- (macro (lambda (bindings body)
-                      `((lambda ,(map car bindings)
-                          ,body) ,@(map cadr bindings)))))
-
-(let- ((x '1)) x)
-
-((macro-function let) '((x ())) '(lambda () (toggle x)))
-
-(define not (lambda (x) (if x () 'true)))
-(define toggle (macro (lambda (x) `(set ,x (not ,x)))))
-(define inverter (let ((x ())) (lambda () (toggle x))))
-
-(inverter)
-(inverter)
-(list (inverter) (inverter))
-
-'(define make-Ai-stream (lambda () (make-input-stream  (lambda ( )             #\A ))))
-'(define make-Ao-stream (lambda () (make-output-stream (lambda (x) (write-char #\A)))))
-'(define skip-whitespace)
-'(define read-delimited-list (lambda (delimiter)
-                               (sequence
-                                (skip-whitespace)
-                                (let ((next (read)))))))
