@@ -149,7 +149,7 @@ x `eq` y = if x == y then intern =<< stringToLstring "true" else return Nil
 ifFunction :: ThreeParam
 ifFunction Nil (Function _)         (Function (Idd e _)) = e Nil
 ifFunction _   (Function (Idd t _)) (Function _)         = t Nil
-ifFunction _   _                    _                    = error "ifFunction: Not a function."
+ifFunction _   _                    _                    = error "if-function: Not a function."
 
 intern :: OneParam
 intern name = do
@@ -160,6 +160,10 @@ intern name = do
   case symbolCM of
     Just symbolC -> readCell symbolC
     Nothing      -> cons (Symbol name) (Symbol name) >>= push tableC >> return (Symbol name)
+
+symbolName :: OneParam
+symbolName (Symbol name) = return name
+symbolName _             = error "symbol-name: Not a symbol."
 
 type ZeroParam = Lisp Object
 zeroParam :: String -> ZeroParam -> Lisp Object
@@ -268,19 +272,15 @@ initializeGlobalEnvironment stdIn stdOut stdErr = do
                      , ("eq"            , twoParam   "eq"            eq              )
                      , ("call/cc"       , oneParam   "call/cc"       callWithCurrentContinuation)
                      , ("quit"          , zeroParam  "quit"          quit            )
+                     , ("intern"        , oneParam   "intern"        intern          )
+                     , ("symbol-name"   , oneParam   "symbol-name"   symbolName      )
                      ] ++ initialStreams stdIn stdOut stdErr)
 
 listToLlist :: [Object] -> Lisp Object
 listToLlist = foldM (flip cons) Nil . reverse
 
-{-getStringString :: Lisp Object
-getStringString = do
-  stringString <- getStringString
-  stringSymbol <- intern stringString
-  liftM (NewType undefined) (listToLlist $ map Char "string")-}
-
 stringToLstring :: String -> Lisp Object
-stringToLstring string = liftM2 NewType (return Nil) {-(intern =<< stringToLstring "string")-} (listToLlist $ map Char string)
+stringToLstring string = liftM2 NewType (return Nil) (listToLlist $ map Char string)
 
 llistToList :: Object -> Lisp ([Object], Object)
 llistToList (Cons xC xsC) = do
