@@ -51,7 +51,7 @@ lookupByName :: Environment -> Object -> Lisp (Maybe Cell)
 lookupByName Nil                      _                 = return Nothing
 lookupByName (Cons entryC restC) name@(NewType _ name') = do
   Cons keyC valueC <- readCell entryC
-  Symbol (NewType _ name'') <- readCell keyC
+  Symbol (Idd (NewType _ name'') _) <- readCell keyC
   found <- name' `listEqual` name''
   if found then return $ Just valueC else readCell restC >>= flip lookupByName name
 lookupByName _                   NewType {}       = error "lookupByName: Environment is not a list."

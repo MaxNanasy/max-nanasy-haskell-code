@@ -18,11 +18,11 @@ data Object = SpecialOperator SpecialOperator
             | Function        Function
             | Cons            Cell Cell
             | Nil
-            | Symbol          Object
+            | Symbol          (Idd Object)
             | Char            Char
             | Stream          Stream
             | NewType         Object Object
-              deriving (Eq)
+              deriving Eq
 
 newtype Lisp a = Lisp { unLisp :: ReaderT Environment (ReaderT Cell (StateT Identifier (ContT Object IO))) a } deriving (Monad, MonadIO, MonadCont)
 

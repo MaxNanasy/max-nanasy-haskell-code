@@ -33,8 +33,8 @@ compileForm env symbol@(Symbol _name) = return $ LexicalReference $ undefined lo
 compileForm _env        (Cons _f _xs) = undefined-}
 
 eval :: Environment -> OneParam
-eval env symbol@(Symbol name)     = lookupSymbol env symbol >>= maybe (lstringToString name >>= error) readCell
-eval env  _form@(Cons funC argsC) = do
+eval env symbol@(Symbol (Idd name _)) = lookupSymbol env symbol >>= maybe (lstringToString name >>= error) readCell
+eval env  _form@(Cons funC argsC)     = do
   fun <- eval env =<< readCell funC
   args <- readCell argsC
   case fun of
@@ -47,7 +47,7 @@ eval env  _form@(Cons funC argsC) = do
                                       writeString " is not a functional value in "
                                       write form
                                       writeString " ."-}
-eval _          x                 = return x
+eval _          x                     = return x
 
 quote :: Lisp Object
 quote  = incrementIdCounter >>= return . SpecialOperator . Idd (\ _ (Cons xC _) -> readCell xC)
@@ -80,8 +80,8 @@ withDynamicBindings symbols values (Function (Idd f _)) = zipLlists symbols valu
 withDynamicBindings _       _      _                    = error "with-dynamic-bindings: Not a function."
 
 dynamicValue :: OneParam
-dynamicValue symbol@(Symbol name) = lookupSymbolDynamically symbol >>= maybe (lstringToString name >>= error) readCell
-dynamicValue        x             = return x
+dynamicValue symbol@(Symbol (Idd name _)) = lookupSymbolDynamically symbol >>= maybe (lstringToString name >>= error) readCell
+dynamicValue        x                     = return x
 
 defineSymbol :: TwoParam
 defineSymbol symbol value = do
@@ -159,11 +159,16 @@ intern name = do
   symbolCM <- lookupByName table name
   case symbolCM of
     Just symbolC -> readCell symbolC
-    Nothing      -> cons (Symbol name) (Symbol name) >>= push tableC >> return (Symbol name)
+    Nothing      -> do
+                  n <- incrementIdCounter
+                  let symbol = Symbol $ Idd name n
+                  entry <- cons symbol symbol
+                  push tableC entry
+                  return symbol
 
 symbolName :: OneParam
-symbolName (Symbol name) = return name
-symbolName _             = error "symbol-name: Not a symbol."
+symbolName (Symbol (Idd name _)) = return name
+symbolName _                     = error "symbol-name: Not a symbol."
 
 type ZeroParam = Lisp Object
 zeroParam :: String -> ZeroParam -> Lisp Object
@@ -242,7 +247,9 @@ quit = liftIO exitSuccess
 initializeGlobalEnvironment :: Stream -> Stream -> Stream -> Lisp ()
 initializeGlobalEnvironment stdIn stdOut stdErr = do
   envC <- getGlobalEnvironment
-  internSymbol <- liftM Symbol $ stringToLstring "*intern-table*"
+  n <- incrementIdCounter
+  internString <- stringToLstring "*intern-table*"
+  let internSymbol = Symbol $ Idd internString n
   internValue <- cons internSymbol internSymbol >>= flip cons Nil
   internEntry <- cons internSymbol internValue
   push envC internEntry
@@ -279,8 +286,15 @@ initializeGlobalEnvironment stdIn stdOut stdErr = do
 listToLlist :: [Object] -> Lisp Object
 listToLlist = foldM (flip cons) Nil . reverse
 
+getStringSymbol :: Lisp Object
+getStringSymbol = do
+  stringList <- listToLlist $ map Char "string"
+  n <- incrementIdCounter
+  let stringSymbol = Symbol $ Idd (NewType stringSymbol stringList) n
+  return stringSymbol
+
 stringToLstring :: String -> Lisp Object
-stringToLstring string = liftM2 NewType (return Nil) (listToLlist $ map Char string)
+stringToLstring string = liftM2 NewType getStringSymbol (listToLlist $ map Char string)
 
 llistToList :: Object -> Lisp ([Object], Object)
 llistToList (Cons xC xsC) = do
@@ -465,7 +479,7 @@ defaultWrite x stream = do
                        _  -> writeNormally
              _ -> writeNormally-}
     Nil           -> stringToLstring "()" >>= writeString' >> return Nil
-    Symbol name   -> writeString' name >> return Nil
+    Symbol (Idd name _) -> writeString' name >> return Nil
     Char char     -> stringToLstring "#\\" >>= writeString' >> writeChar' (Char char)
     Stream _      -> stringToLstring "#<stream>" >>= writeString' >> return Nil
     NewType t y   -> do
