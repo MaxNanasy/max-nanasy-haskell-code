@@ -1,16 +1,13 @@
-module Language.Lisp.Utility (mapLlist, append, zipLlists, lookupSymbol, lookupByName) where
+module Language.Lisp.Utility (mapLlist, append, zipLlists, lookupSymbol, lookupSymbolLexically) where
 
-import Language.Lisp.Types
 import Language.Lisp.Monad
-
-import Control.Monad
 
 cons :: Object -> Object -> Lisp Object
 cons a d = liftM2 Cons (newCell a) (newCell d)
 
 mapLlist :: Object -> Object -> Lisp Object
 mapLlist fn@(Function (Idd f _)) (Cons aC dC) = do
-  a <- f =<< readCell aC
+  a <- f . (: []) =<< readCell aC
   d <- mapLlist fn =<< readCell dC
   cons a d
 mapLlist _ Nil = return Nil
@@ -37,38 +34,14 @@ zipLlists (Cons xC xsC) (Cons yC ysC) = do
   cons pair rest
 zipLlists _             _             = error "zipLlists: Not a list."
 
-listEqual :: Object -> Object -> Lisp Bool
-Nil         `listEqual` Nil       = return True
-Cons xC xsC `listEqual` Cons yC ysC = do
-  x  <- readCell xC
-  y  <- readCell yC
-  xs <- readCell xsC
-  ys <- readCell ysC
-  liftM (x == y &&) (xs `listEqual` ys)
-_           `listEqual` _         = return False
+lookupSymbol :: Environment -> Object -> Maybe Cell
+lookupSymbol []                     _      = Nothing
+lookupSymbol ((key, valueC) : rest) symbol =
+    if key == symbol
+    then Just valueC
+    else lookupSymbol rest symbol
 
-lookupByName :: Environment -> Object -> Lisp (Maybe Cell)
-lookupByName Nil                      _                 = return Nothing
-lookupByName (Cons entryC restC) name@(NewType _ name') = do
-  Cons keyC valueC <- readCell entryC
-  Symbol (Idd (NewType _ name'') _) <- readCell keyC
-  found <- name' `listEqual` name''
-  if found then return $ Just valueC else readCell restC >>= flip lookupByName name
-lookupByName _                   NewType {}       = error "lookupByName: Environment is not a list."
-lookupByName _                   _                = error "lookupByName: Not a string."
-
-lookupSymbol :: Environment -> Object -> Lisp (Maybe Cell)
-lookupSymbol env symbol = let
-    lookupSymbol' :: Environment -> Lisp (Maybe Cell)
-    lookupSymbol' Nil                 = return Nothing
-    lookupSymbol' (Cons entryC restC) = do
-                            Cons keyC valueC <- readCell entryC
-                            key              <- readCell keyC
-                            if symbol == key then return $ Just valueC else readCell restC >>= lookupSymbol'
-    lookupSymbol' _                   = error "lookupSymbol: Environment is not a list."
-  in do
-    gEnv <- getGlobalEnvironment >>= readCell
-    valueCM <- lookupSymbol' env
-    case valueCM of
-      Nothing -> lookupSymbol' gEnv
-      Just _  -> return valueCM
+lookupSymbolLexically :: Environment -> Object -> Lisp (Maybe Cell)
+lookupSymbolLexically env symbol = do
+  gEnv <- getGlobalEnvironment
+  return $ lookupSymbol (env ++ gEnv) symbol
