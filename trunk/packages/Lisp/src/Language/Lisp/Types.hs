@@ -18,22 +18,24 @@ data Object = SpecialOperator SpecialOperator
             | Function        Function
             | Cons            Cell Cell
             | Nil
-            | Symbol          (Idd Object)
+            | Symbol          (Idd String)
+            | String          String
             | Char            Char
             | Stream          Stream
             | NewType         Object Object
               deriving Eq
 
-newtype Lisp a = Lisp { unLisp :: ReaderT Environment (ReaderT Cell (StateT Identifier (ContT Object IO))) a } deriving (Monad, MonadIO, MonadCont)
+newtype Lisp a = Lisp { unLisp :: ReaderT Environment (StateT SymbolTable (StateT Environment (StateT Identifier (ContT Object IO)))) a } deriving (Monad, MonadIO, MonadCont)
 
 type Stream = Handle
 
-type Function        = Idd (Object -> Lisp Object)
+type Function        = Idd ([Object] -> Lisp Object)
 type Macro           = Function
-type SpecialOperator = Idd (Environment -> Object -> Lisp Object)
+type SpecialOperator = Idd (Environment -> [Object] -> Lisp Object)
 
 type Identifier = Integer
 
-type Environment = Object
+type Environment = [(Object, Cell)]
+type SymbolTable = [Object]
 
 newtype Cell = Cell (Idd (IORef Object)) deriving (Eq)
