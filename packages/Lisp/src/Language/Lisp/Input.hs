@@ -51,7 +51,7 @@ skipWhitespace stream = do
     _                       -> return ()
 
 isSymbolCharacter :: Char -> Bool
-isSymbolCharacter = (`elem` ['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ "+-*/")
+isSymbolCharacter = (`elem` ['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ "+-*/?!")
 
 readToken :: Stream -> Lisp String
 readToken stream = do
