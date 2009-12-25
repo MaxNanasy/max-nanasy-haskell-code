@@ -1,16 +1,18 @@
-(define-symbol 'list (lambda xs xs))
+(define-symbol (quote list) (lambda xs xs))
 
-(define-symbol 'define (macro (lambda (name value)
+(define-symbol (quote define) (macro (lambda (name value)
                                 (list
-                                 'define-symbol
-                                 (list 'quote name)
+                                 (quote define-symbol)
+                                 (list (quote quote) name)
                                  value))))
 
 (define if (macro (lambda (i t e)
                     (list
-                     'if-function i
-                     (list 'lambda () t)
-                     (list 'lambda () e)))))
+                     (quote if-function) i
+                     (list (quote lambda) () t)
+                     (list (quote lambda) () e)))))
+
+(define not (lambda (x) (if x () (quote true))))
 
 (define sequence (lambda xs (last xs)))
 
@@ -28,7 +30,7 @@
 (define let (macro (lambda (bindings body)
                      (cons
                       (list
-                       'lambda
+                       (quote lambda)
                        (map car bindings)
                        body)
                       (map cadr bindings)))))
@@ -41,15 +43,12 @@
                          (lookup x (cdr alist))))
                    ())))
 
-(define print (lambda (x stream) (sequence (write-char #\
- stream) (write x stream) (write-char #\  stream) x)))
-
 (define make-char-reader (lambda (char form) (cons char (lambda (stream) (list form (read stream))))))
 (define comma-reader (lambda (stream)
                        (let ((c (peek-char stream)))
                          (list (if (eq c #\@)
-                                   (sequence (read-char stream) 'unquote-splice)
-                                 'unquote) (read stream)))))
+                                   (sequence (read-char stream) (quote unquote-splice))
+                                 (quote unquote)) (read stream)))))
 (define eof-reader (lambda (stream) ((dynamic *read-eof*))))
 (define double-quote-reader (lambda (stream) (list-to-string (read-delimited-string #\" stream))))
 (define read-delimited-string (lambda (char stream)
@@ -57,83 +56,84 @@
                                   (if (eq c char)
                                       ()
                                     (cons c (read-delimited-string char stream))))))
+(define read-delimited-list (lambda (char stream)
+                              (sequence
+                               (skip-whitespace stream)
+                               (let ((c (peek-char stream)))
+                                 (if (eq c char)
+                                     (sequence (read-char stream) ())
+                                   (cons (read stream) (read-delimited-list char stream)))))))
+(define open-parenthesis-reader (lambda (stream) (read-delimited-list #\) stream)))
+(define close-parenthesis-reader (lambda (stream) ()))
 
-(define *reader-dispatch-table* (list (make-char-reader #\' 'quote             )
-                                      (make-char-reader #\` 'quasiquote        )
-                                      (cons             #\, comma-reader       )
-                                      (make-char-reader #\% 'dynamic           )
-                                      (cons             ()  eof-reader         )
-                                      (cons             #\" double-quote-reader)))
+(define skip-whitespace (lambda (stream)
+                          (let ((c (peek-char stream)))
+                            (if (whitespace? c)
+                                (sequence (read-char stream) (skip-whitespace stream))
+                              ()))))
+(define whitespace? (lambda (c)
+                      (member? c (quote (#\  #\
+)))))
 
 (define token-char? (lambda (c)
-                      (or (lookup char *reader-dispatch-table*) 
+                      (if (whitespace? c)
+                          ()
+                        (not (lookup c *reader-dispatch-table*)))))
+
+(define member? (lambda (x ys)
+                  (if ys
+                      (if (eq x (car ys))
+                          (quote true)
+                        (member? x (cdr ys)))
+                    ())))
+
+(define dynamic (macro (lambda (form) (list (quote dynamic-value) (list (quote quote) form)))))
+
+(define append (lambda (xs ys)
+                 (if xs
+                     (cons (car xs) (append (cdr xs) ys))
+                   ys)))
+(define quasiquote-form (lambda (form)
+                            (if (eq (type-of form) (quote cons))
+                                (let ((head (car form)))
+                                  (if (eq head (quote unquote))
+                                      (list (quote list) (cadr form))
+                                    (if (eq head (quote unquote-splice))
+                                        (cadr form)
+                                      (list (quote list) (list (quote append) (quasiquote-form head) (list (quote car) (quasiquote-form (cdr form))))))))
+                              (list (quote quote) (list form)))))
+(define quasiquote (macro (lambda (form) (list (quote car) (quasiquote-form form)))))
+
+(define *reader-dispatch-table* (list (make-char-reader #\' (quote quote)           )
+                                      (make-char-reader #\` (quote quasiquote)      )
+                                      (cons             #\, comma-reader            )
+                                      (make-char-reader #\% (quote dynamic)         )
+                                      (cons             ()  eof-reader              )
+                                      (cons             #\" double-quote-reader     )
+                                      (cons             #\( open-parenthesis-reader )
+                                      (cons             #\) close-parenthesis-reader)))
 
 (define read (lambda (stream)
                (let ((char (peek-char stream)))
                  (let ((dispatch-function (lookup char *reader-dispatch-table*)))
                    (if dispatch-function
                        (sequence (read-char stream) (dispatch-function stream))
-                     (intern (list-to-string (read-token stream))))))))
+                     (if (whitespace? char)
+                         (sequence (read-char stream) (read stream))
+                       (intern (list-to-string (read-token stream)))))))))
 
 (define read-token (lambda (stream)
                      (if (token-char? (peek-char stream))
-                         ()
-                       (cons (read-char stream) (read-token stream)))))
-
-(print (read-token *standard-input*) *standard-output*)
+                         (cons (read-char stream) (read-token stream))
+                       ())))
 
 (define load-stream (lambda (stream) (sequence (eval (read stream)) (load-stream stream))))
 
 (define load-file (lambda (name)
                     (call/cc (lambda (k)
                                (with-dynamic-bindings (quote (*read-eof*)) (list (lambda ()
-                                                           (k ())))
-                                            (load-stream (open-file name)))))))
+                                                                                   (k ())))
+                                                      (lambda ()
+                                                        (load-stream (open-file name))))))))
 
 (load-file (list-to-string (list #\l #\o #\a #\d #\a #\b #\l #\e)))
-
-(define append (lambda (xs ys)
-                 (if xs
-                     (cons (car xs) (append (cdr xs) ys))
-                   ys)))
-
-(define quasiquote-form (lambda (form)
-                            (if (eq (type-of form) 'cons)
-                                (let ((head (car form)))
-                                  (if (eq head 'unquote)
-                                      (list 'list (cadr form))
-                                    (if (eq head 'unquote-splice)
-                                        (cadr form)
-                                      (list 'list (list 'append (quasiquote-form head) (list 'car (quasiquote-form (cdr form))))))))
-                              (list 'quote (list form)))))
-(define quasiquote (macro (lambda (form) (list 'car (quasiquote-form form)))))
-
-(define dynamic (macro (lambda (form) `(dynamic-value ',form))))
-
-(define dynamic-let (macro (lambda (bindings form)
-                             `(with-dynamic-bindings
-                               ',(map car bindings)
-                               (list ,@(map cadr bindings))
-                               (lambda () ,form)))))
-
-(define write-string (lambda (string stream)
-                       (map (lambda (x) (write-char x stream)) (un-new-type string))))
-(define write-line (lambda (string stream)
-                     (sequence (write-string string stream)
-                               (write-char #\
- stream))))
-
-(write-line "REPL" *standard-output*)
-(write-line "----" *standard-output*)
-
-(define repl (lambda ()
-               (sequence
-                (print (eval (read %*standard-input*)) %*standard-output*)
-                (write-char #\
- %*standard-output*)
-                (repl))))
-(repl)
-
-END
-
-(quit)
