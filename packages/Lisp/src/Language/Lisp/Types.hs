@@ -15,7 +15,7 @@ instance Eq (Idd a) where
 
 data Object = SpecialOperator SpecialOperator
             | Macro           Macro
-            | Function        Function
+            | Function        { applyObject :: Function }
             | Cons            Cell Cell
             | Nil
             | Symbol          (Idd String)

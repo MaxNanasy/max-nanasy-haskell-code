@@ -6,4 +6,4 @@ Cabal-Version:  >= 1.2
 Executable lisp
   Main-Is       : Main.hs
   Hs-Source-Dirs: src
-  Build-Depends : base, mtl
+  Build-Depends : base, mtl, plugins

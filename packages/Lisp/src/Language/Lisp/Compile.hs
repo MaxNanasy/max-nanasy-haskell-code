@@ -1,4 +1,4 @@
-module Language.Lisp.Compile (compileForm, CompiledCode, generateEvalString) where
+module Language.Lisp.Compile (compileForm, CompiledCode, generateEvalString, evalString) where
 
 import Language.Lisp.Monad hiding (Macro, SpecialOperator)
 import Language.Lisp.Monad        (Macro, SpecialOperator)
@@ -6,7 +6,12 @@ import qualified Language.Lisp.Monad as LLM
 import Language.Lisp.List
 import Language.Lisp.Symbol
 
+import System.Eval.Haskell hiding (symbol)
+
 import Data.List
+import Control.Monad.Trans
+
+import Language.Lisp.EvalImport ()
 
 data CompiledCode = LiteralObject       Object
                   | LexicalReference    LexicalIdentifier
@@ -26,8 +31,15 @@ instance Show CompiledCode where
 generateEvalString :: CompiledCode -> String
 generateEvalString (LexicalReference    (Symbol (Idd name _))      ) = concat ["(readCell ", name, ")"]
 generateEvalString (LexicalSet          (Symbol (Idd name _)) c    ) = concat ["(", generateEvalString c, " >>= writeCell ", name]
-generateEvalString (FunctionApplication fC                    argCs) = concat ["(", generateEvalString fC, " =<< sequence ", mapShowList generateEvalString argCs, ")"]
-generateEvalString (FunctionAbstraction params                bodyC) = concat ["(Function (\\ ", mapShowList symbolName params, " -> ", generateEvalString bodyC, "))"]
+generateEvalString (FunctionApplication fC                    argCs) = concat ["(do f <- (", generateEvalString fC, ") ; applyObject f =<< sequence ", mapShowList generateEvalString argCs, ")"]
+generateEvalString (FunctionAbstraction params                bodyC) = concat ["(Function (\\ args -> mapM newCell args >>= (\\ ", mapShowList symbolName params, " -> ", generateEvalString bodyC, ")))"]
+
+evalString :: String -> Lisp Object
+evalString s = do
+  cM <- liftIO $ unsafeEval_ s ["Language.Lisp.EvalImport"] ["-v"] [] [] :: Lisp (Either [String] (Lisp Object))
+  case cM of
+    Left es -> error $ show es
+    Right c -> c
 
 mapShowList :: (a -> String) -> [a] -> String
 mapShowList f xs = concat ["[", concat $ intersperse ", " $ map f xs, "]"]

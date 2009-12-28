@@ -225,4 +225,8 @@ run replStream stdIn stdOut stdErr = do
   return ()
 
 repl :: Stream -> Lisp Object
-repl stream = forever $ LIn.read stream >>= compileForm [] >>= liftIO . putStrLn . generateEvalString
+repl stream = forever $ do
+                form <- LIn.read stream
+                es <- liftM generateEvalString $ compileForm [] form
+                liftIO $ putStrLn es
+                evalString es
