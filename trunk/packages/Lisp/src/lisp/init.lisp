@@ -1,3 +1,7 @@
+(define-symbol (quote repl) (lambda () ((lambda (x y z) z) (write (compile (default-read *standard-input*)) *standard-output*) (write-char #\
+ *standard-output*) (repl))))
+(repl)
+
 (define-symbol (quote list) (lambda xs xs))
 
 (define-symbol (quote define) (macro (lambda (name value)
