@@ -24,9 +24,9 @@ write stream x = do
                    writeString' "#<macro "
                    writeString' $ show n
                    writeChar' '>'
-    SpecialOperator (Idd _ n) -> do
+    SpecialOperator so        -> do
                    writeString' "#<special-operator "
-                   writeString' $ show n
+                   writeString' $ show so
                    writeChar' '>'
     Cons yC ysC               -> do
                    y  <- readCell yC

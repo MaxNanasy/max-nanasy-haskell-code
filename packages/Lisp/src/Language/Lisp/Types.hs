@@ -31,7 +31,10 @@ type Stream = Handle
 
 type Function        = Idd ([Object] -> Lisp Object)
 type Macro           = Function
-type SpecialOperator = Idd (Environment -> [Object] -> Lisp Object)
+data SpecialOperator = Quote
+                     | Lambda
+                     | Set
+                       deriving (Eq, Show)
 
 type Identifier = Integer
 
