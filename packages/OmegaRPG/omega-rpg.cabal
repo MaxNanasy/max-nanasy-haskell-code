@@ -1,0 +1,16 @@
+name:                omega-rpg
+version:             0.0
+synopsis:            A Haskell port of the original omega-rpg
+description:         omega-rpg was originally implemented in C; this is a reimplementation in (hopefully) idiomatic Haskell.
+category:            Game
+license:             LGPL
+license-file:        LICENSE
+author:              Max Nanasy
+maintainer:          Max Nanasy <madmardigan53@gmail.com>
+build-depends:       base, MonadRandom, mtl, haskell98
+build-type:          Simple
+
+executable:          omega-rpg
+hs-source-dirs:      src
+main-is:             OmegaRPG.hs
+other-modules:       OmegaRPG.Player, Control.Monad.Omega, Control.Monad.Omega.Interface, Control.Monad.Omega.Interface.Class 
