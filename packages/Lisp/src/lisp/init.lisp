@@ -65,6 +65,10 @@
                                    (cons (read stream) (read-delimited-list char stream)))))))
 (define open-parenthesis-reader (lambda (stream) (read-delimited-list #\) stream)))
 (define close-parenthesis-reader (lambda (stream) ()))
+(define sharpsign-reader (lambda (stream)
+                           ((lookup (read-char stream) *sharpsign-dispatch-table*) stream)))
+
+(define sharpsign-backslash-reader (lambda (stream) (read-char stream)))
 
 (define skip-whitespace (lambda (stream)
                           (let ((c (peek-char stream)))
@@ -104,6 +108,7 @@
                               (list (quote quote) (list form)))))
 (define quasiquote (macro (lambda (form) (list (quote car) (quasiquote-form form)))))
 
+(define *sharpsign-dispatch-table* (list (cons #\\ sharpsign-backslash-reader)))
 (define *reader-dispatch-table* (list (make-char-reader #\' (quote quote)           )
                                       (make-char-reader #\` (quote quasiquote)      )
                                       (cons             #\, comma-reader            )
@@ -111,7 +116,8 @@
                                       (cons             ()  eof-reader              )
                                       (cons             #\" double-quote-reader     )
                                       (cons             #\( open-parenthesis-reader )
-                                      (cons             #\) close-parenthesis-reader)))
+                                      (cons             #\) close-parenthesis-reader)
+                                      (cons             #\# sharpsign-reader        )))
 
 (define read (lambda (stream)
                (let ((char (peek-char stream)))
@@ -136,4 +142,4 @@
                                                       (lambda ()
                                                         (load-stream (open-file name))))))))
 
-(load-file (list-to-string (list #\l #\o #\a #\d #\a #\b #\l #\e)))
+(load-file (list-to-string (list #\i #\n #\i #\t #\0 #\. #\l #\i #\s #\p)))

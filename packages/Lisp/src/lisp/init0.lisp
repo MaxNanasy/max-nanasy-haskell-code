@@ -5,7 +5,7 @@
                                (lambda () ,form)))))
 
 (define write-string (lambda (string stream)
-                       (map (lambda (x) (write-char x stream)) (un-new-type string))))
+                       (map (lambda (x) (write-char x stream)) (string-to-list string))))
 (define write-line (lambda (string stream)
                      (sequence (write-string string stream)
                                (write-char #\
@@ -19,8 +19,13 @@
 
 (define repl (lambda ()
                (sequence
-                (print (eval (read %*standard-input*)) %*standard-output*)
+                (print (eval (read *standard-input*)) *standard-output*)
                 (write-char #\
  %*standard-output*)
                 (repl))))
-(repl)
+
+(define quit (lambda (x) (*quit* x)))
+
+(print (call/cc (lambda (k)
+                  (dynamic-let ((*quit* k))
+                    (repl)))) *standard-output*)
