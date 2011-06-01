@@ -6,7 +6,6 @@ import qualified Language.Lisp.Symbol as LSym
 import Language.Lisp.List
 import qualified Language.Lisp.Input  as LIn
 import qualified Language.Lisp.Output as LOut
-import Language.Lisp.Compile
 
 import           Prelude hiding (read, error)
 import qualified Prelude as P
@@ -21,10 +20,45 @@ import           System.IO hiding (openFile)
 import qualified System.IO as SI
 import System.Exit
 
+eval :: Environment -> OneParam
+eval env symbol@(Symbol (Idd name _)) = lookupSymbolLexically env symbol >>= maybe (error $ "eval: " ++ name ++ " not found lexically.") readCell
+eval env  _form@(Cons funC argsC)     = do
+  fun <- eval env =<< readCell funC
+  (args, Nil) <- readCell argsC >>= llistToList
+  case fun of
+    SpecialOperator (Idd operator _) -> operator env args
+    Function        (Idd function _) -> function =<< mapM (eval env) args
+    Macro           (Idd macro    _) -> macro args >>= eval env
+    _                                -> error "eval: Not a functional value."
+eval _          x                     = return x
+
+quote :: Lisp Object
+quote  = incrementIdCounter >>= return . SpecialOperator . Idd (\ _ [x] -> return x)
+
+lambda :: Lisp Object
+lambda = incrementIdCounter >>= return . SpecialOperator . Idd (\ env [params, body] -> do
+                                                                  (params', dot) <- llistToList params
+                                                                  let f args = do
+                                                                        env' <- case dot of
+                                                                                    Nil -> zipWithM (\ param arg -> newCell arg >>= \ argC -> return (param, argC)) params' args >>= return . (++ env)
+                                                                                    _   -> listToLlist args >>= newCell >>= \ argsC -> return $ (dot, argsC) : env
+                                                                        eval env' body
+                                                                  liftM (Function . Idd f) incrementIdCounter)
+
+set :: Lisp Object
+set    = incrementIdCounter >>= return . SpecialOperator . Idd (\ env [s@(Symbol (Idd name _)), vF] -> do
+                                                                 xCM <- lookupSymbolLexically env s
+                                                                 case xCM of
+                                                                   Just xC -> do
+                                                                            v <- eval env vF
+                                                                            writeCell xC v
+                                                                            return v
+                                                                   Nothing -> error $ "set: " ++ name ++ " not found lexically.")
+
 lookupSymbolDynamically :: Object -> Lisp (Maybe Cell)
 lookupSymbolDynamically symbol = do
   env <- getDynamicEnvironment
-  undefined lookupSymbolLexically env symbol
+  lookupSymbolLexically env symbol
 
 withDynamicBindings :: ThreeParam
 withDynamicBindings symbols values (Function (Idd f _)) = do
@@ -99,9 +133,6 @@ ifFunction Nil (Function _)         (Function (Idd e _)) = e []
 ifFunction _   (Function (Idd t _)) (Function _)         = t []
 ifFunction _   _                    _                    = error "if-function: Not a function."
 
-compile :: OneParam
-compile x = liftM (String . show) $ compileForm [] x
-
 type ZeroParam = Lisp Object
 zeroParam :: String -> ZeroParam -> Lisp Object
 zeroParam fname f = incrementIdCounter >>=
@@ -158,10 +189,6 @@ peekChar :: OneParam
 peekChar (Stream stream) = liftM (maybe Nil Char) $ LIn.peekChar stream
 peekChar _               = error "peek-char: Not a stream."
 
-read :: OneParam
-read (Stream stream) = LIn.read stream
-read _               = error "read: Not a stream."
-
 intern :: OneParam
 intern (String name) = LSym.intern name
 intern _             = error "intern: Not a string."
@@ -171,9 +198,9 @@ symbolName = return . String . LSym.symbolName
 
 initializeGlobalEnvironment :: Stream -> Stream -> Stream -> Lisp ()
 initializeGlobalEnvironment stdIn stdOut stdErr = do
-  addListToEnv ([ ("quote"         , return $ SpecialOperator Quote                               )
-                , ("lambda"        , return $ SpecialOperator Lambda                              )
-                , ("set"           , return $ SpecialOperator Set                                 )
+  addListToEnv ([ ("quote"         , quote                                      )
+                , ("lambda"        , lambda                                     )
+                , ("set"           , set                                        )
                 , ("macro"         , oneParam   "macro"          functionToMacro)
                 , ("car"           , oneParam   "car"            car            )
                 , ("cdr"           , oneParam   "cdr"            cdr            )
@@ -181,6 +208,7 @@ initializeGlobalEnvironment stdIn stdOut stdErr = do
                 , ("type-of"       , oneParam   "type-of"        typeOf         )
                 , ("new-type"      , twoParam   "new-type"       newType        )
                 , ("un-new-type"   , oneParam   "un-new-type"    unNewType      )
+                , ("eval"          , oneParam   "eval"           (eval [])     )
                 , ("macro-function", oneParam   "macro-function" macroToFunction)
                 , ("if-function"   , threeParam "if-function"    ifFunction      )
                 , ("apply"         , twoParam   "apply"          apply           )
@@ -191,7 +219,6 @@ initializeGlobalEnvironment stdIn stdOut stdErr = do
                 , ("read-char"     , oneParam   "read-char"      readChar        )
                 , ("peek-char"     , oneParam   "peek-char"      peekChar        )
                 , ("write"         , twoParam   "write"          write           )
-                , ("default-read"  , oneParam   "default-read"   read            )
                 , ("open-file"     , oneParam   "open-file"      openFile        )
                 , ("eq"            , twoParam   "eq"             eq              )
                 , ("call/cc"       , oneParam   "call/cc"        callWithCurrentContinuation)
@@ -199,7 +226,6 @@ initializeGlobalEnvironment stdIn stdOut stdErr = do
                 , ("intern"        , oneParam   "intern"         intern          )
                 , ("symbol-name"   , oneParam   "symbol-name"    symbolName      )
                 , ("list-to-string", oneParam   "list-to-string" listToString    )
-                , ("compile"       , oneParam   "compile"        compile         )
                 ] ++ initialStreams stdIn stdOut stdErr)
 
 listToLlist :: [Object] -> Lisp Object
@@ -225,8 +251,4 @@ run replStream stdIn stdOut stdErr = do
   return ()
 
 repl :: Stream -> Lisp Object
-repl stream = forever $ do
-                form <- LIn.read stream
-                es <- liftM generateEvalString $ compileForm [] form
-                liftIO $ putStrLn es
-                evalString es
+repl stream = forever $ LIn.read stream >>= eval []

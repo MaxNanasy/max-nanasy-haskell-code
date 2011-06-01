@@ -15,7 +15,7 @@ instance Eq (Idd a) where
 
 data Object = SpecialOperator SpecialOperator
             | Macro           Macro
-            | Function        { applyObject :: Function }
+            | Function        Function
             | Cons            Cell Cell
             | Nil
             | Symbol          (Idd String)
@@ -31,10 +31,7 @@ type Stream = Handle
 
 type Function        = Idd ([Object] -> Lisp Object)
 type Macro           = Function
-data SpecialOperator = Quote
-                     | Lambda
-                     | Set
-                       deriving (Eq, Show)
+type SpecialOperator = Idd (Environment -> [Object] -> Lisp Object)
 
 type Identifier = Integer
 

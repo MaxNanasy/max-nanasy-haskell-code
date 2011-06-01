@@ -35,14 +35,13 @@ zipLlists (Cons xC xsC) (Cons yC ysC) = do
 zipLlists _             _             = error "zipLlists: Not a list."
 
 lookupSymbol :: Environment -> Object -> Maybe Cell
-lookupSymbol = flip lookup
+lookupSymbol []                     _      = Nothing
+lookupSymbol ((key, valueC) : rest) symbol =
+    if key == symbol
+    then Just valueC
+    else lookupSymbol rest symbol
 
-data EnvType = Global | Lexical
-
-lookupSymbolLexically :: Environment -> Object -> Lisp (Maybe (Cell, EnvType))
+lookupSymbolLexically :: Environment -> Object -> Lisp (Maybe Cell)
 lookupSymbolLexically env symbol = do
-  case lookupSymbol env symbol of
-    Nothing -> do
-      gEnv <- getGlobalEnvironment
-      return $ fmap (\ vC -> (vC, Global)) $ lookupSymbol gEnv symbol
-    Just vC -> return $ Just (vC, Lexical)
+  gEnv <- getGlobalEnvironment
+  return $ lookupSymbol (env ++ gEnv) symbol
