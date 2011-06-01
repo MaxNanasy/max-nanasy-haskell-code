@@ -1,6 +1,5 @@
 module OmegaRPG.Player(Player(..), generateRandomPlayer) where
 
-import Control.Monad.Omega
 import Control.Monad.Random
 
 import Control.Monad
@@ -44,7 +43,7 @@ defaultPlayer = Player
                   , money        = 0
                   }
 
-generateRandomPlayer :: Monad m => OmegaT m Player
+generateRandomPlayer :: MonadRandom m => m Player
 generateRandomPlayer = do
   [baseStrength, baseConstitution, baseDexterity, baseAgility, baseIntelligence, basePower] <- replicateM 6 $ getRandomR baseStatRange
   [modPhysical, modSomatic, modMental] <- replicateM 3 $ liftM2 (+) (getRandomR modStatRange) (getRandomR modStatRange)
