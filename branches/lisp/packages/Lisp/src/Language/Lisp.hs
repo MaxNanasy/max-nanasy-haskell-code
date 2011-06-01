@@ -125,6 +125,10 @@ listToString cs = do
   (chars, Nil) <- llistToList cs
   return $ String $ map (\ (Char c) -> c) chars
 
+stringToList :: OneParam
+stringToList (String string) = listToLlist $ map Char string 
+stringToList _               = error "string-to-list: Not a string."
+
 eq :: TwoParam
 x `eq` y = if x == y then LSym.intern "true" else return Nil
 
@@ -164,9 +168,6 @@ threeParam fname f = incrementIdCounter >>=
                                               case args of
                                                 [arg0, arg1, arg2] -> f arg0 arg1 arg2
                                                 _                  -> error $ fname ++ ": Expected 3 arguments; received " ++ show (length args) ++ ".")
-
-quit :: ZeroParam
-quit = liftIO exitSuccess
 
 openFile :: OneParam
 openFile (String name) = liftIO $ liftM Stream $ flip SI.openFile ReadWriteMode name
@@ -222,10 +223,10 @@ initializeGlobalEnvironment stdIn stdOut stdErr = do
                 , ("open-file"     , oneParam   "open-file"      openFile        )
                 , ("eq"            , twoParam   "eq"             eq              )
                 , ("call/cc"       , oneParam   "call/cc"        callWithCurrentContinuation)
-                , ("quit"          , zeroParam  "quit"           quit            )
                 , ("intern"        , oneParam   "intern"         intern          )
                 , ("symbol-name"   , oneParam   "symbol-name"    symbolName      )
                 , ("list-to-string", oneParam   "list-to-string" listToString    )
+                , ("string-to-list", oneParam   "string-to-list" stringToList    )
                 ] ++ initialStreams stdIn stdOut stdErr)
 
 listToLlist :: [Object] -> Lisp Object
