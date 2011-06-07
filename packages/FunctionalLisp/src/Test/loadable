@@ -1,0 +1,4 @@
+(define print-twice (lambda (x stream) (sequence (print x stream) (print x stream))))
+(print-twice 'alpha-beta-gamma *standard-output*)
+(print-twice print-twice *standard-output*)
+(print-twice 'aaabbb *standard-output*)
