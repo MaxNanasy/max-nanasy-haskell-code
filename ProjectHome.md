@@ -1,0 +1,1 @@
+This is code I have written in Haskell.  I am placing it here for convenience.
